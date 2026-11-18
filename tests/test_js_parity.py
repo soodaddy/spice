@@ -76,6 +76,45 @@ def _reference():
     return ref
 
 
+def _dram_reference():
+    """Lesson 11: write transient, charge sharing (minispice netlists with the same timing) and the retention ODE (examples/dram_retention.py)."""
+    import sys
+    sys.path.insert(0, str(ROOT / "examples"))
+    from dram_retention import retention
+    out = {"write": [], "share": [], "ret": []}
+    for vpp, vth in ((2.0, 0.7), (1.9, 0.7), (1.2, 0.7), (2.5, 0.6)):
+        net = (f"t\n.model nacc nmos level=1 vto={vth} kp=300u lambda=0.05\nVbl bl 0 PULSE(0 1.2 0.5n 0.1n 0.1n 8n 40n)\nVwl wl 0 PULSE(0 {vpp} 1n 0.2n 0.2n 16n 40n)\n"
+               "M1 bl wl sn 0 nacc W=0.1u L=0.1u\nCs sn 0 25f\n.end\n")
+        r = transient(parse(net)[0], 10e-12, 8.5e-9)
+        idx = list(range(0, len(r.axis), 5))
+        out["write"].append(dict(vpp=vpp, vth=vth, idx=idx, sn=[float(r["v(sn)"][i]) for i in idx]))
+    for vcell, vpp, vth, cs, cbl in ((1.2, 2.0, 0.7, 25e-15, 150e-15), (0.0, 2.0, 0.7, 25e-15, 150e-15), (1.2, 2.0, 0.5, 15e-15, 220e-15)):
+        net = (f"t\n.model nacc nmos level=1 vto={vth} kp=300u lambda=0.05\n.model nsw nmos level=1 vto=0.5 kp=300u lambda=0.05\nVblp vblp 0 0.6\nVcell vcell 0 {vcell}\n"
+               f"Veq eq 0 PULSE({vpp} 0 0.3n 0.1n 0.1n 100n 200n)\nVwl wl 0 PULSE(0 {vpp} 1n 0.2n 0.2n 20n 40n)\nMeq bl eq vblp 0 nsw W=1u L=0.1u\nMwr sn eq vcell 0 nsw W=1u L=0.1u\n"
+               f"Macc bl wl sn 0 nacc W=0.1u L=0.1u\nCbl bl 0 {cbl}\nCs sn 0 {cs}\n.end\n")
+        r = transient(parse(net)[0], 10e-12, 3.9e-9)
+        idx = list(range(110, len(r.axis), 10))
+        out["share"].append(dict(vcell=vcell, vpp=vpp, vth=vth, cs=cs, cbl=cbl, idx=idx, bl=[float(r["v(bl)"][i]) for i in idx], sn=[float(r["v(sn)"][i]) for i in idx]))
+    for vth, vwl, d1, vbl in ((0.5, 0.0, True, None), (0.7, 0.0, True, None), (0.5, -0.3, True, None), (0.6, 0.0, True, "pre"), (0.5, 0.0, False, None), (0.7, -0.2, True, None)):
+        r = retention(vth, vwl, d1, vbl=vbl)
+        out["ret"].append(dict(vth=vth, vwl=vwl, data1=d1, vbl=vbl, tret=None if r["tret"] == float("inf") else r["tret"], v_end=r["vs"][-1], n=len(r["ts"])))
+    return out
+
+
+def test_js_dram_matches_minispice(tmp_path):
+    ref = _dram_reference()
+    f = tmp_path / "dram.json"
+    f.write_text(json.dumps(ref))
+    r = subprocess.run([NODE, str(ROOT / "tests" / "js_parity.js"), str(f), "dram"], capture_output=True, text=True, timeout=300)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    assert out["write"]["max_abs_dv"] < 2e-4, out["write"]                     # same equations, same time grid -> agreement far below the ~10 mV effects the lesson discusses
+    assert out["share"]["max_abs_dv"] < 5e-4, out["share"]
+    assert out["write"]["cases"] == 4 and out["share"]["cases"] == 3
+    assert out["ret"]["max_rel_dt"] is not None and out["ret"]["max_rel_dt"] < 1e-9, out["ret"]                         # the JS retention ODE mirrors the Python one step by step
+    assert out["ret"]["cases"] == 6 and out["ret"]["finite_cases"] == 5
+
+
 def test_js_port_matches_minispice(tmp_path):
     ref = _reference()
     f = tmp_path / "ref.json"

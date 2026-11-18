@@ -73,7 +73,7 @@
   function niceTicks(lo, hi, n) {
     const span = hi - lo, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
     let step = mag; for (const f of NICE) { if (raw <= f * mag) { step = f * mag; break; } }
-    const out = []; for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9 * span; v += step) out.push(+v.toPrecision(12));
+    const out = []; for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9 * span; v += step) out.push(Math.abs(v) < 1e-9 * step ? 0 : +v.toPrecision(12));   // the 0 tick must be exactly 0 (not -6e-17)
     return out;
   }
   const fmtTick = (v) => { const a = Math.abs(v); if (a === 0) return '0'; if (a >= 1e4 || a < 1e-3) return v.toExponential(0).replace('e+', 'e'); return +v.toPrecision(3) + ''; };
@@ -89,7 +89,7 @@
       this.W = w; this.H = hh;
     }
     begin(opts) {
-      Object.assign(this.o, opts || {});
+      Object.assign(this.o, { xlog: false, ylog: false }, opts || {});   // axis options are NOT sticky: a widget that switches between a log and a linear plot must not inherit the old scale
       this.resize();
       const c = this.ctx = this.cv.getContext('2d'), o = this.o;
       c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);

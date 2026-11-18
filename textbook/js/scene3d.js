@@ -110,9 +110,10 @@
     }
     sc.box(ox - 4, ox + Lg + 4, oy - 4, oy + Wd + 4, oz + 0.6, oz + 0.6 + tox, [246, 226, 122], { layer: 3, alpha: 0.9 });               // gate oxide
     sc.box(ox - 4, ox + Lg + 4, oy - 4, oy + Wd + 4, oz + 0.6 + tox, oz + 28, vcol(st.v.g, st), { layer: 3, alpha: 0.42 });              // gate
-    sc.label([ox - Lsd / 2, oy + Wd / 2, oz + 2], `S  ${st.v.s.toFixed(2)} V`, { dy: -12 });
-    sc.label([ox + Lg + Lsd / 2, oy + Wd / 2, oz + 2], `D  ${st.v.d.toFixed(2)} V`, { dy: -12 });
-    sc.label([ox + Lg / 2, oy + Wd / 2, oz + 30], `G  ${st.v.g.toFixed(2)} V`, { dy: -6 });
+    const nm = Object.assign({ s: 'S', d: 'D', g: 'G' }, st.names || {});
+    if (nm.s) sc.label([ox - Lsd / 2, oy + Wd / 2, oz + 2], `${nm.s}  ${st.v.s.toFixed(2)} V`, { dy: -12 });
+    if (nm.d) sc.label([ox + Lg + Lsd / 2, oy + Wd / 2, oz + 2], `${nm.d}  ${st.v.d.toFixed(2)} V`, { dy: -12 });
+    if (nm.g) sc.label([ox + Lg / 2, oy + Wd / 2, oz + 30], `${nm.g}  ${st.v.g.toFixed(2)} V`, { dy: -6 });
     sc.label([ox + Lg / 2, oy - 8, oz - depth - sub / 2], `B  ${st.v.b.toFixed(2)} V`, { color: '#4a5160', dy: 16 });
     // conduction current: dots from the drain terminal to the source terminal (id > 0) or the other way round.
     // Path parameter s in [0,1): first S/D block (20 %), the channel (60 %, carriers dwell where the charge is large), last block (20 %).
@@ -201,6 +202,27 @@
     }
   }
 
+  // ------------------------------------------------------------------ DRAM 1T1C cell (lesson 11)
+  /** st: planar state of the access transistor with s = storage-node side (left), d = bit-line side (right), plus {vdd, vbl, vsn, vwl}. */
+  function dram(sc, st) {
+    const Lg = 56, Lsd = 44, Wd = 70, H = 64, hBL = 50, xc = Lg + Lsd / 2;
+    planar(sc, Object.assign({}, st, { names: { s: '', d: '', g: '' } }), [0, 0, 0]);
+    const cG = vcol(st.vwl, st);
+    sc.box(-4, Lg + 4, -56, -4, 3.1, 28, cG, { layer: 3, alpha: 0.42 });                                                                  // the word line continues along y
+    sc.box(-4, Lg + 4, Wd + 4, Wd + 56, 3.1, 28, cG, { layer: 3, alpha: 0.42 });
+    sc.label([Lg / 2, -56, 30], `WL  ${st.vwl.toFixed(2)} V`, { dy: -4 });
+    sc.box(xc - 4, xc + 4, Wd / 2 - 4, Wd / 2 + 4, 0, hBL, vcol(st.vbl, st), { layer: 2 });                                                // bit-line contact
+    sc.box(xc - 4, xc + 118, Wd / 2 - 5, Wd / 2 + 5, hBL, hBL + 9, vcol(st.vbl, st), { layer: 3 });                                        // the bit line runs along x, perpendicular to the word line
+    sc.label([xc + 100, Wd / 2, hBL + 12], `BL  ${st.vbl.toFixed(2)} V`, { dy: -6 });
+    const frac = clamp(st.vsn / (st.vdd || 1), 0, 1), cSN = vcol(st.vsn, st);                                                              // storage capacitor: the fill height = stored voltage
+    if (frac > 0.01) sc.box(-40, -8, 10, Wd - 10, 0.5, 0.5 + H * frac, cSN, { layer: 2 });
+    sc.box(-43, -5, 6, Wd - 6, 0.5, 0.5 + H, [176, 184, 198], { layer: 3, alpha: 0.2 });                                                   // plate electrode (glass-like shell)
+    sc.label([-24, Wd / 2, H + 4], `SN  ${st.vsn.toFixed(2)} V`, { dy: -6 });
+    sc.label([-24, Wd / 2, H * 0.45], 'Cs', { color: '#1f3b73', font: '700 12px system-ui' });
+    const fp = flowParams(st.I, 1);
+    if (fp.on) for (let i = 0; i < fp.per; i++) { const s = ((i + 0.17) / fp.per + (st.phase || 0) * fp.speed) % 1; sc.dot([xc, Wd / 2, hBL * (st.I > 0 ? 1 - s : s)], fp.r, dotFill(st.I)); }
+  }
+
   /** NMOS + PMOS pair (lesson 4): st.n and st.p are planar states */
   function cmos(sc, st) {
     const Wd = 70, dx = 200;    // the two devices side by side so that nothing hides behind anything
@@ -211,5 +233,5 @@
     sc.label([dx + 30, Wd / 2, 36], 'PMOS (n-well)', { color: '#1f3b73', font: '700 12px system-ui', dy: -14 });
   }
 
-  G.Scene3D = { Scene, planar, finfet, gaa, cmos, flowParams, mag };
+  G.Scene3D = { Scene, planar, finfet, gaa, cmos, dram, flowParams, mag };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import draw
+from ngspice_util import run_ngspice as _run_ngspice
 from minispice import dc_sweep, op, parse, transient
 
 here = pathlib.Path(__file__).parent
@@ -47,20 +48,7 @@ NET_RING = (here / "ring_osc.cir").read_text()          # the very same file as 
 
 
 def run_ngspice(netlist, name, analysis, vectors):
-    """Strip analysis cards, add one ngspice control block, run in batch mode, return columns."""
-    keep = [l for l in netlist.splitlines() if not l.strip().lower().startswith((".dc", ".tran", ".op", ".end"))]
-    data = work / f"{name}.dat"
-    data.unlink(missing_ok=True)
-    deck = "\n".join(keep + [
-        ".options reltol=1e-6 abstol=1e-14 vntol=1e-9 gmin=1e-12 method=trap interp",
-        ".control", "set wr_singlescale", "set wr_vecnames", analysis, f"wrdata {data.name} {' '.join(vectors)}", ".endc", ".end", ""])
-    cir = work / f"{name}.cir"
-    cir.write_text(deck)
-    p = subprocess.run(["ngspice", "-b", "-o", f"{name}.log", cir.name], cwd=work, capture_output=True, text=True, timeout=300)
-    log = (work / f"{name}.log").read_text()
-    if p.returncode != 0 or not data.exists() or re.search(r"\berror\b", log, re.I):
-        raise RuntimeError(f"ngspice failed for {name}:\n{log[-800:]}")
-    return np.loadtxt(data, skiprows=1)
+    return _run_ngspice(netlist, name, analysis, vectors, work)
 
 
 J = {}

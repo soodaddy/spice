@@ -5,6 +5,27 @@ const ref = JSON.parse(require('fs').readFileSync(process.argv[2], 'utf8'));
 const rel = (a, b, floor) => Math.abs(a - b) / Math.max(Math.abs(b), floor);
 const out = {};
 
+if (process.argv[3] === 'dram') {          // lesson 11 reference: node tests/js_parity.js dram.json dram
+  let ww = 0, ws = 0, mr = 0, finite = 0;
+  for (const c of ref.write) {
+    const r = MS.dramSim({ mode: 'write1', vdd: 1.2, vpp: c.vpp, vth: c.vth, wlr: 1, cs: 25e-15, cbl: 150e-15, voff: 0, gmsa: 2e-3, method: 'trap', dt: 10e-12 });
+    for (let k = 0; k < c.idx.length; k++) ww = Math.max(ww, Math.abs(r.sn[c.idx[k]] - c.sn[k]));
+  }
+  for (const c of ref.share) {
+    const r = MS.dramSim({ mode: c.vcell > 0.6 ? 'read1' : 'read0', vdd: 1.2, vpp: c.vpp, vth: c.vth, wlr: 1, cs: c.cs, cbl: c.cbl, voff: 0, gmsa: 2e-3, method: 'trap', dt: 10e-12 });
+    for (let k = 0; k < c.idx.length; k++) ws = Math.max(ws, Math.abs(r.bl[c.idx[k]] - c.bl[k]), Math.abs(r.sn[c.idx[k]] - c.sn[k]));
+  }
+  for (const c of ref.ret) {
+    const r = MS.dramRetention({ vdd: 1.2, vpp: 2.0, vth: c.vth, vwl: c.vwl, data1: c.data1, vbl: c.vbl, n: 1.3, cs: 25e-15, cbl: 150e-15, voff: 0.02, ij: 0.2e-15, wlr: 1 });
+    if (c.tret === null) { if (r.tret !== Infinity) mr = Infinity; }
+    else { finite++; mr = Math.max(mr, Math.abs(r.tret - c.tret) / c.tret); }
+    mr = Math.max(mr, Math.abs(r.vs[r.vs.length - 1] - c.v_end) / 1e3 + (r.ts.length === c.n ? 0 : 1));
+  }
+  out.write = { cases: ref.write.length, max_abs_dv: ww }; out.share = { cases: ref.share.length, max_abs_dv: ws }; out.ret = { cases: ref.ret.length, finite_cases: finite, max_rel_dt: mr };
+  console.log(JSON.stringify(out));
+  process.exit(0);
+}
+
 // 1) device models: id and conductances, charges
 let worst = { id: 0, gd: 0, gg: 0, gs: 0, gb: 0, q: 0 };
 for (const c of ref.models) {

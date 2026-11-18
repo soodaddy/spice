@@ -207,7 +207,7 @@
     const trap = spec.method === 'trap';
     const lo = spec.vmin !== undefined ? spec.vmin : -1, hi = spec.vmax !== undefined ? spec.vmax : 5;
     let t = 0;
-    let v = bisect((x) => spec.dev(x, 0).i, lo, hi);                  // DC operating point (capacitors open)
+    let v = spec.v0 !== undefined ? spec.v0 : bisect((x) => spec.dev(x, 0).i, lo, hi);   // DC operating point (capacitors open) unless given
     const caps = spec.caps.map((c) => ({ c: c.c, other: c.other, vc: v - c.other(0), i: 0 }));
     const out = { t: [0], v: [v], iDev: [spec.dev(v, 0).i], iCap: [spec.caps.map(() => 0)] };
     const corners = (spec.breakpoints || []).slice().sort((a, b) => a - b);
@@ -232,6 +232,101 @@
     return out;
   }
 
+  /**
+   * Transient of TWO unknown nodes (newton with the 2x2 Jacobian). spec.dev(v1, v2, t) -> {i1, i2, g11, g12, g21, g22}: currents leaving
+   * node 1/2 into the devices and their derivatives; spec.caps = [{c, node: 0|1, other: (t) => voltage of the other plate}]; spec.init = [v1, v2].
+   * Same time grid and source-corner handling as transient1 / minispice.
+   */
+  function transient2(spec) {
+    const trap = spec.method === 'trap';
+    let x = spec.init.slice();
+    const caps = spec.caps.map((c) => ({ c: c.c, node: c.node, other: c.other, vc: x[c.node] - c.other(0), i: 0 }));
+    const out = { t: [0], v1: [x[0]], v2: [x[1]] };
+    const corners = (spec.breakpoints || []).slice().sort((a, b) => a - b), n = Math.round(spec.tstop / spec.tstep), eps = 1e-6 * spec.tstep;
+    const attempt = (t0, t1) => {
+      const h = t1 - t0, a = (trap ? 2 : 1) / h; let v = x.slice();
+      for (let it = 0; it < 60; it++) {
+        const d = spec.dev(v[0], v[1], t1), f = [d.i1, d.i2], J = [[d.g11, d.g12], [d.g21, d.g22]];
+        for (const c of caps) { f[c.node] += a * c.c * ((v[c.node] - c.other(t1)) - c.vc) - (trap ? c.i : 0); J[c.node][c.node] += a * c.c; }
+        const det = J[0][0] * J[1][1] - J[0][1] * J[1][0];
+        let dx = [(-f[0] * J[1][1] + f[1] * J[0][1]) / det, (-J[0][0] * f[1] + J[1][0] * f[0]) / det];
+        const m = Math.max(Math.abs(dx[0]), Math.abs(dx[1]));
+        if (!isFinite(m)) return null;
+        if (m > 0.5) dx = dx.map((q) => q * 0.5 / m);
+        v = [v[0] + dx[0], v[1] + dx[1]];
+        if (m < 1e-12) return { v, a };
+      }
+      return null;
+    };
+    const advance = (t0, t1, depth) => {
+      const r = attempt(t0, t1);
+      if (r) { for (const c of caps) { const vc = r.v[c.node] - c.other(t1); c.i = r.a * c.c * (vc - c.vc) - (trap ? c.i : 0); c.vc = vc; } x = r.v; return; }
+      if (depth >= 12) throw new Error('transient2 did not converge near t=' + t1);
+      const mid = 0.5 * (t0 + t1); advance(t0, mid, depth + 1); advance(mid, t1, depth + 1);
+    };
+    for (let k = 1; k <= n; k++) {
+      const t0 = (k - 1) * spec.tstep, t1 = k * spec.tstep, inside = corners.filter((q) => q > t0 + eps && q < t1 - eps), pts = [t0].concat(inside, [t1]);
+      for (let j = 0; j + 1 < pts.length; j++) advance(pts[j], pts[j + 1], 0);
+      out.t.push(t1); out.v1.push(x[0]); out.v2.push(x[1]);
+    }
+    return out;
+  }
+
+  /**
+   * One DRAM cell operation (lesson 11). q = {mode: 'write1'|'write0'|'read1'|'read0', vdd, vpp, vth, wlr (access W/L), cs, cbl, voff, gmsa, vwloff, method, dt}.
+   * Access transistor: Level 1. Write: the bit line is an ideal driver. Read: charge sharing with the bit line floating at Vdd/2 (two nodes),
+   * then an IDEAL regenerative sense amplifier (time constant Cbl/gm, input offset voff) drives BL to a rail and restores the cell through the access transistor.
+   */
+  function dramSim(q) {
+    const m = makeModel('level1', 1, { vto: q.vth, kp: 300e-6, lambda: 0.05 }), w = q.wlr * 1e-7, l = 1e-7, dt = q.dt || 10e-12, tstop = 12e-9, tsa = 4e-9;
+    const vblp = q.vdd / 2, vh = Math.min(q.vdd, q.vpp - q.vth), method = q.method || 'trap', wloff = q.vwloff || 0;
+    const wlp = pulse({ v1: wloff, v2: q.vpp, td: 1e-9, tr: 0.2e-9, tf: 0.2e-9, pw: 8e-9, per: 1e-6 });
+    const bps = wlp.breakpoints(tstop), N = Math.round(tstop / dt);
+    const t = Array.from({ length: N + 1 }, (_, k) => k * dt), wl = t.map((x) => wlp.value(x));
+    let bl = [], sn = [], blb = [], info = {};
+    const devSn = (blf) => (v, tt) => ({ i: -evaluate(m, blf(tt), wlp.value(tt), v, 0, w, l).id, g: 0 });
+    if (q.mode === 'write1' || q.mode === 'write0') {
+      const vb = q.mode === 'write1' ? q.vdd : 0, v0 = q.mode === 'write1' ? 0 : vh;
+      const r = transient1({ method, tstep: dt, tstop, breakpoints: bps, vmin: -1, vmax: q.vdd + 1, v0, dev: devSn(() => vb), caps: [{ c: q.cs, other: () => 0 }] });
+      sn = r.v; bl = t.map(() => vb); blb = t.map(() => q.vdd - vb);
+    } else {
+      const d1 = q.mode === 'read1', sn0 = d1 ? vh : 0, nA = Math.round(tsa / dt);
+      const ra = transient2({ method, tstep: dt, tstop: tsa, breakpoints: bps.filter((x) => x < tsa), init: [vblp, sn0],
+        dev: (v1, v2, tt) => { const e = evaluate(m, v1, wlp.value(tt), v2, 0, w, l); return { i1: e.id, i2: -e.id, g11: e.gd, g12: e.gs, g21: -e.gd, g22: -e.gs }; },
+        caps: [{ c: q.cbl, node: 0, other: () => 0 }, { c: q.cs, node: 1, other: () => 0 }] });
+      const A0 = ra.v1[nA] - vblp, cm = vblp + A0 / 2, tau = q.cbl / q.gmsa, deff = A0 - q.voff, snsa = ra.v2[nA];
+      const blOf = (tt) => { const e = Math.exp(Math.min((tt - tsa) / tau, 700)), D = q.voff + deff * e; return clamp(cm + D / 2, 0, q.vdd); };
+      const rb = transient1({ method, tstep: dt, tstop: tstop - tsa, breakpoints: bps.filter((x) => x > tsa).map((x) => x - tsa), vmin: -1, vmax: q.vdd + 1, v0: snsa,
+        dev: (v, tt) => ({ i: -evaluate(m, blOf(tsa + tt), wlp.value(tsa + tt), v, 0, w, l).id, g: 0 }), caps: [{ c: q.cs, other: () => 0 }] });
+      bl = ra.v1.slice(0, nA).concat(rb.t.map((x) => blOf(tsa + x))); sn = ra.v2.slice(0, nA).concat(rb.v);
+      blb = t.map((x, k) => (x < tsa ? vblp : clamp(2 * (vblp + A0 / 2) - bl[k], 0, q.vdd)));   // complementary to BL: the pair is symmetric about the common mode
+      const bit = deff > 0 ? 1 : 0;
+      info = { dv: A0, bit, expected: d1 ? 1 : 0, ok: bit === (d1 ? 1 : 0), tau, tsa, snsa, level: q.mode === 'read1' ? vh : 0 };
+    }
+    const iacc = t.map((x, k) => evaluate(m, bl[k], wl[k], sn[k], 0, w, l).id);
+    const icbl = bl.map((x, k) => (k ? q.cbl * (x - bl[k - 1]) / dt : 0));
+    return Object.assign({ t, wl, bl, blb, sn, iacc, icbl, vh, dt, tsa }, info);
+  }
+
+  /** Retention (mirror of retention() in examples/lesson11_dram.py): the stored charge leaks through the OFF access transistor (EKV, sub-threshold)
+   *  and a junction leakage; fixed voltage step dv. vbl: null = worst case (0 V for a stored 1, Vdd for a stored 0), 'pre' = Vdd/2, or a number. */
+  function dramRetention(q) {
+    const m = makeModel('ekv', 1, { vto: q.vth, kp: 300e-6, n: q.n, lambda: 0.05 }), w = q.wlr * 1e-7, l = 1e-7, dv = q.dv || 1e-3, tmax = q.tmax || 1e6;
+    const vh = Math.min(q.vdd, q.vpp - q.vth), vb = q.vbl == null ? (q.data1 ? 0 : q.vdd) : q.vbl === 'pre' ? q.vdd / 2 : q.vbl;
+    const vlim = q.data1 ? q.vdd / 2 + q.voff * (q.cs + q.cbl) / q.cs : q.vdd / 2 - q.voff * (q.cs + q.cbl) / q.cs;
+    let v = q.data1 ? vh : 0, t = 0, step = 0, tret = Infinity; const ts = [0], vs = [v];
+    if (q.data1 ? v <= vlim : v >= vlim) return { tret: 0, ts, vs, vh, vlim, vbl: vb };   // written level already beyond the sensing limit
+    while (t < tmax) {
+      const ileave = -evaluate(m, vb, q.vwl, v, 0, w, l).id, itot = v > 0 ? ileave + q.ij * (1 - Math.exp(-v / VT)) : ileave;
+      if (Math.abs(itot) < 1e-30) break;
+      const dtt = dv * q.cs / Math.abs(itot), vn = v - Math.sign(itot) * dv;
+      if (q.data1 ? vn <= vlim : vn >= vlim) { tret = t + dtt * Math.abs(vlim - v) / dv; ts.push(tret); vs.push(vlim); break; }
+      t += dtt; v = vn; step++;
+      if (step % 25 === 0) { ts.push(t); vs.push(v); }
+    }
+    return { tret, ts, vs, vh, vlim, vbl: vb };
+  }
+
   // ------------------------------------------------------------------ formatting
   function si(x, unit, digits) {
     digits = digits || 3; unit = unit || '';
@@ -243,6 +338,6 @@
     return (x / best[0]).toPrecision(digits).replace(/\.?0+$/, (m) => (m.includes('.') ? '' : m)) + ' ' + best[1] + unit;
   }
 
-  const API = { VT, clamp, makeModel, evaluate, charges, chargeJac, channelProfile, bisect, newton1, pulse, transient1, si, ekvF, ekvFinv, qOfI, level1Core, ekvCore };
+  const API = { VT, clamp, makeModel, evaluate, charges, chargeJac, channelProfile, bisect, newton1, pulse, transient1, transient2, dramSim, dramRetention, si, ekvF, ekvFinv, qOfI, level1Core, ekvCore };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else G.MS = API;
 })(typeof window !== 'undefined' ? window : globalThis);

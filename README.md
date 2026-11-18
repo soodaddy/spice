@@ -2,11 +2,11 @@
 spice study
 
 SPICE가 MOSFET compact model을 푸는 방식을 **직접 만들어 보며** 배우는 학습 프로젝트입니다.
-평면형(planar) MOSFET 한 개부터 시작해서 CMOS 인버터, EKV 모델, 채널 전하 모델, ngspice 교차검증, 그리고 FinFET과 GAA(나노시트)까지 10개 레슨으로 구성했습니다.
+평면형(planar) MOSFET 한 개부터 시작해서 CMOS 인버터, EKV 모델, 채널 전하 모델, ngspice 교차검증, FinFET과 GAA(나노시트), 그리고 DRAM 셀(워드라인·비트라인·저장 커패시터)까지 11개 레슨으로 구성했습니다.
 
 ## 교재
 
-**[`docs/index.html`](docs/index.html)** — 10개 레슨 교재 (그림이 포함된 단일 HTML 파일). 저장소를 받은 뒤 브라우저로 열면 됩니다.
+**[`docs/index.html`](docs/index.html)** — 11개 레슨 교재 (그림과 슬라이더로 조작하는 3D·회로도 시각화가 포함된 단일 HTML 파일). 저장소를 받은 뒤 브라우저로 열면 됩니다.
 (GitHub Pages로 공개하려면 저장소 Settings → Pages에서 `main` 브랜치의 `/docs` 폴더를 지정하면 됩니다. 현재는 설정하지 않았습니다.)
 
 | 레슨 | 내용 | 상태 |
@@ -21,6 +21,7 @@ SPICE가 MOSFET compact model을 푸는 방식을 **직접 만들어 보며** �
 | 8 | Verilog-A / OSDI | **미실행**: 절차와 소스만 수록, `examples/va/ekv_simple.va`는 컴파일해 보지 않음 |
 | 9 | FinFET | 부분 검증: 구조·기하는 계산, 설계 경험칙은 강의자료. **n, η, fin 폭은 가상의 예시값** |
 | 10 | GAA / 나노시트 | 부분 검증: 기하 유도와 방향성 계산. **나노시트 치수, n, η는 가상의 예시값** |
+| 11 | DRAM 1T1C 셀 | 부분 검증: 쓰기·읽기(전하 공유, 센스앰프)는 손 계산 = minispice = ngspice(Level 1). **유지 시간은 외부 비교 없는 누설 ODE, Cs·Cbl·누설 값은 가상의 예시값** |
 
 ## 구성
 

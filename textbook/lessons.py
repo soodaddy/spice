@@ -618,3 +618,149 @@ def lesson10():
 {_srcs([SRC_LEC] + SRC_BSIM)}
 <p class="run">직접 해 보기: <code>python examples/lesson10_gaa.py</code></p></section>"""
     return s
+
+
+SRC_DRAM = [("https://www.halbleiter.org/en/digital-technology/dram-cell/", "halbleiter.org: DRAM 셀 (1T1C, 게이트 = 워드라인, 소스–드레인 경로가 저장 커패시터와 비트라인을 잇는다)"),
+            ("https://arxiv.org/pdf/1610.09603", "Seshadri 외, in-DRAM 연산 논문의 DRAM 배경 설명: 비트라인 precharge(½Vdd), 전하 공유, 센스앰프 증폭, 셀 복원"),
+            ("https://en.wikipedia.org/wiki/Dynamic_random-access_memory", "Wikipedia: DRAM (행마다 64 ms 이하로 리프레시: JEDEC 규격. 위키백과 사본에서 확인)")]
+
+
+def SUP10(x):
+    """1e6 -> '10⁶' (the nearest power of ten)"""
+    import math
+    return "10" + str(round(math.log10(x))).translate(str.maketrans("-0123456789", "⁻⁰¹²³⁴⁵⁶⁷⁸⁹"))
+
+
+EQ_SHARE = eq("Cs·Vcell + Cbl·Vblp = (Cs + Cbl)·V_final" + chr(10) + chr(10) + "ΔV = V_final − Vblp = (Vcell − Vblp) · Cs / (Cs + Cbl)")
+
+
+def lesson11():
+    k = J(11)
+    P, W, SH, CY, SA, RT = k["params"], k["write"], k["share"], k["cycle"], k["sa"], k["retention"]
+    ps = lambda x: f"{x*1e12:.1f} ps"
+    mv = lambda x: f"{x*1e3:.2f} mV"
+    wrows = []
+    for vpp in ("1.2", "1.9", "2.0", "2.5"):
+        w = W[vpp]
+        tail = f"{w['tau_tail_hand']*1e12:.0f} / {w['tau_tail_sim']*1e12:.0f} ps" if w["tau_tail_sim"] else ("∞ (Vdd에 못 닿음)" if vpp == "1.9" else "—")
+        wrows.append([f"{vpp} V", f"{w['level_hand']:.2f} V", f"{w['level_sim']:.4f} V", tail, f"{w['t90']*1e9:.2f} ns", f"{w['t_to_zero']*1e9:.3f} ns"])
+    sh = lambda key: SH[key]
+    srows = [[nm, f"{v['vcell']:.2f} V", f"{v['bl_hand']:.5f} V", f"{v['bl_sim']:.5f} V", mv(v["dv_hand"]), f"{v['sn_sim']:.5f} V"] for nm, v in
+             (("저장값 1 (Vpp = 2.0 V로 기록)", SH["1"]), ("저장값 0", SH["0"]), ("저장값 1이지만 Vpp = 1.2 V로 기록", SH["1_unboosted"]))]
+    cb = k["margin"]["cbl"]
+    mrows = [[f"{cb[i]:.0f} fF"] + [f"{k['margin'][c][i]:.1f}" for c in ("cs15", "cs25", "cs35")] for i in (10, 20, 30, 50)]
+    vt = 0.025865
+    ratio_sub = __import__("math").exp(0.2 / (1.3 * vt))
+    rrows = []
+    for key in ("0.5|0.0", "0.6|0.0", "0.7|0.0", "0.8|0.0", "0.5|-0.2", "0.5|-0.4"):
+        r = RT[key]
+        rrows.append([f"{r['vth']:.1f} V", f"{r['vwl']:.1f} V", f"{r['i1_hand']:.2e} A", f"{r['t1']:.4g} s", f"{r['t1_hand']:.4g} s", f"{r['t1_precharge']:.4g} s", f"{r['t1']/64e-3:.3g} ×"])
+    r05, r07, r08 = RT["0.5|0.0"], RT["0.7|0.0"], RT["0.8|0.0"]
+    eq_lim = eq(f"V_lim = Vdd/2 + Voff·(Cs + Cbl)/Cs = 0.6 + 0.02 × 175/25 = {r05['vlim1']:.2f} V" + chr(10) + chr(10) + "t_ret ≈ Cs · (V_쓰기 − V_lim) / I_누설")
+    junc_t = P["cs"] * (r05["vh"] - r05["vlim1"]) / 0.2e-15
+    c1, c0 = CY["1"], CY["0"]
+    wn, sn_ = k["write_ng"], k["share_ng"]
+    s = head(11, "DRAM 1T1C 셀: 워드라인, 비트라인, 저장 커패시터", "DRAM 셀 하나를 “트랜지스터 1개 + 커패시터 1개”의 등가회로로 그리고, 쓰기·읽기(전하 공유와 센스앰프)·유지(누설과 리프레시)를 손 계산과 시뮬레이션으로 따라가 본다.")
+    s += f"""
+{box("warn", "이 레슨의 성격", f'''<p>{CHIP["fact"]}(1T1C 구조, 워드라인·비트라인의 역할, ½Vdd precharge → 전하 공유 → 센스앰프 → 복원의 순서, 64 ms 리프레시 규격), {CHIP["calc"]}(minispice와 ngspice 계산), {CHIP["illus"]}(Cs = 25 fF, Cbl = 150 fF, Vdd = 1.2 V, 액세스 Vth = 0.7 V, 소자 크기, 누설 파라미터 n·Ij)를 구분해서 표시합니다. 값은 실제 제품이 아니라 원리를 보기 위해 정했습니다.</p>
+<p><b>두 가지 모델을 씁니다.</b> 쓰기·읽기는 ns 단위의 동작이라 <b>Level 1</b>로 시뮬레이션하고 ngspice와 비교합니다. 유지 시간은 fA 단위의 누설이 결정하는데, 이것은 문턱 아래 전류가 있는 <b>EKV</b>(레슨 5)로 계산합니다. minispice의 transient는 gmin = 10⁻¹² S가 고정이라(부록 A) fA 누설을 시뮬레이션하면 gmin이 결과를 지배합니다. 그래서 유지 시간은 저장 전하의 감소를 푸는 미분방정식(ODE)으로 계산했고, <b>이 부분은 외부 시뮬레이터와 비교하지 못했습니다.</b></p>''')}
+<h3>11.1 셀의 구조와 등가회로 {CHIP["fact"]}</h3>
+<p>DRAM 셀은 정보를 <b>커패시터의 전하</b>로 저장합니다. 전하가 있으면 1, 없으면 0입니다. 이 커패시터(<b>Cs</b>, 저장 커패시터)를 읽고 쓰는 문을 <b>액세스 NMOS</b> 하나가 맡습니다. 세 가지 선이 있습니다.</p>
+<ul>
+<li><b>워드라인(WL)</b>: 액세스 NMOS의 <b>게이트</b>에 연결됩니다. WL을 올리면 그 행의 셀이 모두 열립니다.</li>
+<li><b>비트라인(BL)</b>: 액세스 NMOS의 <b>드레인 쪽 접점</b>에 연결되고, WL과 직각으로 지나갑니다. 같은 열의 셀이 모두 이 선을 나눠 씁니다.</li>
+<li><b>저장 노드(SN)</b>: NMOS의 다른 쪽 단자와 Cs의 한쪽 판이 만나는 곳입니다. Cs의 반대쪽 판은 모든 셀이 공유하는 <b>플레이트</b>입니다(여기서는 접지로 둡니다).</li></ul>
+<p>BL은 긴 금속선이라 자체 기생 용량 <b>Cbl</b>이 있고, 이것이 Cs보다 훨씬 큽니다(여기서는 {P["cbl"]*1e15:.0f} fF 대 {P["cs"]*1e15:.0f} fF). 이 차이가 읽기를 어렵게 만드는 핵심입니다(11.3).</p>
+{fig("lesson11", "그림 11-1. (a) 1T1C 셀의 등가회로, (b) 같은 셀의 단면 구조(스케일 아님), (c) 쓰기: 워드라인 전압 Vpp가 저장 레벨을 정한다, (d) 읽기 사이클, (e) 유지: 누설로 저장 전압이 내려가는 시간, (f) 비트라인이 길수록 읽기 신호가 작아진다")}
+{ia("l11")}
+<p>위 시각화에서 <b>동작</b>을 바꿔 가며 보세요. 3D에서 왼쪽 탱크가 저장 커패시터이고 채워진 높이가 저장 전압, 오른쪽 위 막대가 비트라인입니다. 회로도의 점은 전류(방향·크기)입니다. <b>읽기</b>의 센스앰프는 이상화한 래치(재생 시정수 Cbl/gm, 입력 오프셋 포함)이고, 이것을 트랜지스터 수준으로 푼 결과가 11.4입니다. 오프셋은 저장값에 <b>불리한 방향</b>으로 가정합니다.</p>
+
+<h3>11.2 쓰기와 워드라인 부스트 {CHIP["calc"]}{CHIP["illus"]}</h3>
+<p>1을 쓸 때는 BL을 Vdd로 올리고 WL을 켭니다. NMOS는 소스(SN)가 올라가면서 Vgs = Vwl − V(SN)이 줄고, V(SN)이 <b>Vwl − Vth</b>에 닿으면 꺼집니다. 그래서 저장 레벨은 다음과 같습니다.</p>
+{eq("V(SN)_max = min( Vdd , Vpp − Vth )")}
+<p>Vpp = Vdd이면 1을 쓸 때 Vth만큼 손실이 생겨 {W["1.2"]["level_hand"]:.2f} V밖에 못 씁니다. 그래서 워드라인을 <b>Vdd보다 높은 Vpp로 승압(부스트)</b>합니다. 이 승압의 필요성은 일반 지식이고 이번 검색에서는 출처를 확인하지 못했습니다. 아래 표는 같은 셀에 Vpp만 바꿔 쓰기를 시뮬레이션한 결과입니다(Level 1, Vth = 0.7 V, W/L = 1, β = {P["beta"]*1e6:.0f} µA/V²).</p>
+{tbl(["Vpp", "손 계산 레벨", "시뮬 (8.5 ns)", "꼬리 시정수 손/시뮬", "0→90 % 시간", "0 쓰기: 90 % 방전"], wrows)}
+<ul>
+<li><b>Vpp = 1.2 V</b>: 레벨이 0.48 V로 Vdd의 절반도 안 됩니다. 11.3에서 이 값이 왜 치명적인지 봅니다.</li>
+<li><b>Vpp = 1.9 V = Vdd + Vth</b>: 손 계산 레벨은 1.2 V지만 시뮬레이션은 8.5 ns에 {W["1.9"]["level_sim"]:.3f} V입니다. V(SN)이 Vdd에 가까워질수록 오버드라이브 Vpp − Vth − V가 0으로 가서 전류가 사라지기 때문입니다.</li>
+<li><b>Vpp &gt; Vdd + Vth</b>: V(SN)이 Vdd에 가까울 때 NMOS는 Vds가 작은 triode이고 전류는 <code>i ≈ β·(Vpp − Vth − Vdd)·(Vdd − V)</code>입니다. 이것은 RC 방전과 같은 모양이라 지수적으로 접근하고 시정수는 <code>τ = Cs / (β·(Vpp − Vth − Vdd))</code>입니다. Vpp = 2.0 V이면 25 fF / (300 µS × 0.1 V) = {W["2.0"]["tau_tail_hand"]*1e12:.0f} ps이고 시뮬레이션의 꼬리를 맞추면 {W["2.0"]["tau_tail_sim"]*1e12:.0f} ps입니다. 손 계산은 V → Vdd 극한의 오버드라이브를 쓰기 때문에, 그보다 오버드라이브가 큰 구간을 포함하는 시뮬레이션보다 느리게 나옵니다. 오버드라이브가 클수록(Vpp = 2.5 V) 차이가 작아져 {W["2.5"]["tau_tail_hand"]*1e12:.0f} ps 대 {W["2.5"]["tau_tail_sim"]*1e12:.0f} ps로 맞습니다. <b>Vpp를 높일수록 쓰기가 빨라지지만</b> 실제 소자에서는 게이트 산화막에 걸리는 전압이 커지는 부담이 있습니다(일반 지식).</li>
+<li><b>0 쓰기</b>는 BL이 0 V이고 Vgs가 크게 유지되어 완전히 0까지 빨리 내려갑니다.</li></ul>
+
+<h3>11.3 읽기 ① 전하 공유 {CHIP["calc"]}</h3>
+<p>읽기 전에 BL은 <b>½Vdd로 precharge</b>됩니다(equalize). WL을 켜면 Cs와 Cbl이 연결되어 전하가 재분배됩니다. 외부와 전하 교환이 없으므로 전하 보존으로 최종 전압을 구합니다.</p>
+{EQ_SHARE}
+<p>1을 저장한 셀(Vcell = {P["vdd"]} V)이면 ΔV = ({P["vdd"]} − {P["vblp"]}) × 25 / (25 + 150) = <b>{SH["1"]["dv_hand"]*1e3:.2f} mV</b>입니다. 0이면 부호만 반대입니다. 시뮬레이션과 비교합니다.</p>
+{tbl(["셀 상태", "Vcell", "BL 손 계산", "BL minispice", "ΔV 손 계산", "SN minispice"], srows)}
+<ul>
+<li>손 계산과 시뮬레이션이 <b>소수점 5째 자리까지 같습니다.</b> 전하 보존은 회로가 어떻게 연결되든 성립하기 때문입니다. BL과 SN이 같은 전압으로 만난 것도 확인됩니다(마지막 두 열).</li>
+<li>신호가 <b>{abs(SH["1"]["dv_hand"])*1e3:.0f} mV</b>에 불과합니다. Cbl이 Cs의 6배라서 셀의 전압 변화 0.6 V가 BL에는 1/7로만 나타납니다. 그림 11-1(f)처럼 BL이 길어(Cbl이 커져)도, Cs가 작아져도 신호는 줄어듭니다.</li>
+<li><b>읽기는 파괴적</b>입니다. 읽고 난 셀의 전압이 {SH["1"]["sn_sim"]:.3f} V로 내려와 원래 값({P["vdd"]} V)을 잃습니다. 그래서 읽은 뒤에 다시 써 넣어야 합니다(11.4의 복원).</li>
+<li><b>Vpp = 1.2 V로 쓴 1</b>은 레벨이 0.5 V이므로 ΔV = {SH["1_unboosted"]["dv_hand"]*1e3:.1f} mV, 즉 <b>0처럼 BL을 내립니다.</b> 승압이 없으면 1을 0으로 잘못 읽습니다.</li></ul>
+<p>읽기 신호를 Cs와 Cbl에 따라 계산한 표입니다({P["vdd"]} V, 저장값 1, 단위 mV). 센스앰프의 입력 오프셋(여기서는 20 mV로 가정)보다 충분히 커야 읽을 수 있습니다.</p>
+{tbl(["Cbl", "Cs = 15 fF", "Cs = 25 fF", "Cs = 35 fF"], mrows)}
+
+<h3>11.4 읽기 ② 센스앰프와 복원 {CHIP["calc"]}</h3>
+<p>센스앰프는 NMOS 2개와 PMOS 2개를 서로 맞물린(cross-coupled) <b>래치</b>입니다. BL과 BLB(기준 쪽 비트라인, ½Vdd에서 변하지 않음)의 작은 차이 D = V(BL) − V(BLB)를 양의 되먹임으로 키워서 한쪽은 Vdd, 다른 쪽은 0 V로 만듭니다. 전원 단자 SAN을 ½Vdd에서 0으로, SAP를 ½Vdd에서 Vdd로 움직여 켭니다. WL이 계속 켜져 있으므로 BL이 Vdd나 0 V로 가면 <b>셀도 같은 값으로 다시 쓰입니다(restore)</b>.</p>
+<p>재생 속도는 손으로 구합니다. 래치의 두 노드는 각각 Cbl이 달려 있고 소신호에서 D는 <code>Cbl·dD/dt = (gmn + gmp)·D</code>를 따라 지수적으로 자랍니다.</p>
+{eq("D(t) = D0 · exp(t / τ),     τ = Cbl / (gmn + gmp)")}
+<p>트랜지스터의 Level 1 식에서 gm을 구하면(게이트 ½Vdd, 소스가 레일일 때) gmn = {SA["gmn"]*1e3:.3f} mS, gmp = {SA["gmp"]*1e3:.3f} mS이므로 τ = 150 fF / {(SA["gmn"]+SA["gmp"])*1e3:.3f} mS = <b>{ps(SA["tau_hand"])}</b>입니다.</p>
+{tbl(["τ를 구한 방법", "값"], [["손 계산 Cbl/(gmn+gmp)", ps(SA["tau_hand"])], ["시뮬레이션, 소신호 구간 (래치를 20 ps에 켜고 D = 0.12–0.30 V를 맞춤)", ps(SA["tau_small"])], ["시뮬레이션, 대신호 구간 (D = 0.3–0.9 V)", ps(SA["tau_large"])],
+                                         ["시뮬레이션, 현실적인 0.5 ns 켜짐 램프의 대신호 구간 (저장값 1 / 0)", f"{ps(c1['tau_fit'])} / {ps(c0['tau_fit'])}"]])}
+<p>손 계산은 <b>소신호 값과 {abs(SA["tau_small"]-SA["tau_hand"])/SA["tau_hand"]*100:.1f} % 차이</b>로 맞습니다. 진폭이 커지면 트랜지스터가 포화에서 벗어나 gm이 줄어서 시정수가 {SA["tau_large"]/SA["tau_hand"]:.2f}배로 길어집니다. 처음에는 이 차이를 손 계산의 오류로 의심했지만, 래치를 빠르게 켜서 소신호 구간만 맞춰 보니 일치했습니다.</p>
+<p>트랜지스터 수준의 읽기 사이클(ngspice와 같은 netlist, 아래 상자)의 결과는 다음과 같습니다.</p>
+{tbl(["저장값", "SA 켜기 직전 D", "끝의 BL / BLB", "복원된 SN", "ngspice와 최대 차이 (BL / BLB / SN)"], [
+    ["1", mv(c1["dv_before_sa"]), f"{c1['bl_end']:.3f} / {c1['blb_end']:.3f} V", f"{c1['sn_restored']:.4f} V", f"{c1['ng']['bl']*1e3:.2f} / {c1['ng']['blb']*1e3:.2f} / {c1['ng']['sn']*1e3:.2f} mV"],
+    ["0", mv(c0["dv_before_sa"]), f"{c0['bl_end']:.3f} / {c0['blb_end']:.3f} V", f"{c0['sn_restored']:.4f} V", f"{c0['ng']['bl']*1e3:.2f} / {c0['ng']['blb']*1e3:.2f} / {c0['ng']['sn']*1e3:.2f} mV"]])}
+<p>D가 {c1["dv_before_sa"]*1e3:.1f} mV로 시작해 BL이 Vdd, BLB가 0 V로 갈라지고, 셀은 {c1["sn_restored"]:.4f} V로 <b>복원</b>됩니다(0도 마찬가지). 센스앰프에 입력 오프셋이 있으면 신호 {abs(SH["1"]["dv_hand"])*1e3:.0f} mV에서 오프셋을 뺀 값이 양수여야 올바르게 읽습니다. 시각화에서 Cs를 10 fF, Cbl을 300 fF로 바꾸고 오프셋을 60 mV로 올리면 1을 0으로 잘못 읽는 것을 볼 수 있습니다.</p>
+{details("읽기 사이클 netlist (트랜지스터 수준 래치)", code(f"""
+.model nacc nmos level=1 vto=0.7 kp=300u lambda=0.05   * 액세스 (Vth 0.7 V)
+.model nsw  nmos level=1 vto=0.5 kp=300u lambda=0.05   * equalize / 초기값 스위치
+.model nsa  nmos level=1 vto=0.4 kp=300u lambda=0.05   * 센스앰프 NMOS
+.model psa  pmos level=1 vto=-0.4 kp=100u lambda=0.05  * 센스앰프 PMOS
+Vblp vblp 0 0.6                       * ½Vdd
+Vcell vcell 0 1.2                     * 저장값 1 (0이면 0)
+Vdd vdd 0 1.2
+Veq eq 0 PULSE(2.0 0 0.3n 0.1n 0.1n 100n 200n)    * 0.3 ns에 equalize 종료
+Vwl wl 0 PULSE(0 2.0 1n 0.2n 0.2n 11n 40n)        * 1 ns에 워드라인 켬
+Vsan san 0 PULSE(0.6 0 4n 0.5n 0.5n 100n 200n)    * 4 ns에 SA 켬
+Vsap sap 0 PULSE(0.6 1.2 4n 0.5n 0.5n 100n 200n)
+Meq1 bl eq vblp 0 nsw W=1u L=0.1u
+Meq2 blb eq vblp 0 nsw W=1u L=0.1u
+Mwr sn eq vcell 0 nsw W=1u L=0.1u                 * 초기 셀 값 설정
+Macc bl wl sn 0 nacc W=0.1u L=0.1u                * 액세스: 드레인 = BL, 소스 = SN
+Cbl bl 0 150f
+Cblb blb 0 150f
+Cs sn 0 25f
+Mn1 bl blb san 0 nsa W=2u L=0.1u
+Mn2 blb bl san 0 nsa W=2u L=0.1u
+Mp1 bl blb sap vdd psa W=4u L=0.1u
+Mp2 blb bl sap vdd psa W=4u L=0.1u
+"""))}
+
+<h3>11.5 유지 시간과 리프레시 {CHIP["calc"]}{CHIP["illus"]}</h3>
+<p>WL이 꺼져 있어도 NMOS는 완전히 꺼지지 않습니다. 문턱 아래 전류(레슨 5)와 접합 누설이 저장 전하를 서서히 빼 갑니다. 센스앰프가 읽을 수 없게 되는 전압 <b>V_lim</b>까지 내려가는 시간이 <b>유지 시간</b>입니다. 센스앰프가 오프셋 {0.02*1e3:.0f} mV를 이기려면 신호가 그 이상이어야 하므로, 저장값 1의 한계는 다음과 같습니다.</p>
+{eq_lim}
+<p>누설 전류는 최악의 경우(BL이 0 V일 때 저장값 1: Vgs = 0, Vds = Vdd)를 가정하고 <code>I = Is·exp((Vwl − Vth)/(n·Vt))·(1 + λVds)·(1 − e^(−Vds/Vt)) + Ij</code>로 계산합니다(Is = 2nβVt², n = 1.3, 접합 누설 Ij = 0.2 fA는 <b>가상의 값</b>). 전압이 내려가면 Vds가 줄어 누설도 줄기 때문에, 전압 1 mV 단계의 ODE로 정확히 풀고 손 계산(전류를 처음 값으로 고정)과 비교합니다.</p>
+{tbl(["액세스 Vth", "WL 낮은 값", "처음 누설 I", "t_ret (ODE)", "t_ret (손: Cs·ΔV/I)", "BL이 ½Vdd일 때", "64 ms의 몇 배"], rrows)}
+<ul>
+<li><b>Vth에 지수적으로 의존</b>합니다. Vth 0.5 → 0.7 V이면 문턱 아래 누설은 exp(0.2 / (1.3 × 0.02587)) = <b>{ratio_sub:.0f}배</b> 줄고, 유지 시간은 {r05["t1"]:.4g} s에서 {r07["t1"]:.4g} s로 늘어납니다({r07["t1"]/r05["t1"]:.0f}배). 전체 전류는 {r05["i1_hand"]/r07["i1_hand"]:.0f}배만 줄었는데, 접합 누설 0.2 fA가 바닥을 만들기 때문입니다.</li>
+<li><b>WL 낮은 값을 음의 전압으로</b> 두면(negative word line) Vth를 올린 것과 같습니다. 이 모델에서 Vth = 0.5 V + WL = −0.2 V는 Vth = 0.7 V + WL = 0 V와 <b>똑같은 {RT["0.5|-0.2"]["t1"]:.4g} s</b>입니다(누설이 Vwl − Vth에만 의존하므로). 단점은 음전압을 만드는 회로가 필요하다는 것입니다(일반 지식).</li>
+<li><b>접합 누설이 바닥</b>입니다. Vth를 {r08["vth"]} V로 올리거나 WL을 −0.4 V로 내려도 {r08["t1"]:.0f} s, {RT["0.5|-0.4"]["t1"]:.0f} s에서 멈추고, 이는 Cs·ΔV/Ij = 25 fF × {r05["vh"]-r05["vlim1"]:.2f} V / 0.2 fA = {junc_t:.1f} s에 가깝습니다. 서브문턱을 줄여도 다른 누설 경로가 남습니다.</li>
+<li><b>BL이 ½Vdd에 대기</b>하는 동안에는(표의 BL이 ½Vdd일 때 열) Vgs가 −0.6 V라서 서브문턱 누설이 거의 없고 모두 접합 누설 한계({r05["t1_precharge"]:.1f} s)에 걸립니다. 최악 가정(BL = 0 V)은 같은 BL의 다른 셀에 0을 쓰는 동안 같은 상황이 되는 것을 가정한 것입니다.</li>
+<li><b>저장값 0</b>은 이 모델에서 잃지 않습니다. 0이 BL(Vdd)쪽에서 새어 들어와도 SN이 오르면 Vgs = −V(SN)이 되어 누설이 스스로 줄어, {SUP10(RT["0.5|0.0"]["t0_end"])} s 동안에도 {RT["0.5|0.0"]["v0_end"]:.2f} V까지만 오르고 한계({RT["0.5|0.0"]["vlim0"]:.2f} V)에 닿지 않습니다. 실제 셀은 이 모델에 없는 다른 경로로도 데이터를 잃습니다.</li></ul>
+<p>JEDEC 규격은 모든 행을 <b>64 ms 이하의 주기로 리프레시</b>하라고 요구합니다(Wikipedia 사본에서 확인). 리프레시는 행을 읽었다가(11.3–11.4) 그대로 다시 쓰는 동작이라 읽기의 복원이 곧 리프레시입니다. 위 표의 값은 64 ms보다 수백 배 깁니다. 실제 DRAM은 온도, 셀 간 편차, 이 모델에 없는 누설 경로(GIDL 등)로 최악의 셀이 훨씬 짧기 때문에 규격을 맞추려고 설계합니다. 이 숫자를 실제 제품의 유지 시간으로 읽으면 안 됩니다.</p>
+
+<h3>11.6 외부 시뮬레이터와의 교차검증 {CHIP["calc"]}</h3>
+{tbl(["비교 대상", "최대 차이", "설명"], [
+    ["쓰기 V(SN), 10 ps 격자", mv(wn["sn"]), f"{wn['t_at_max']*1e9:.2f} ns, 빠르게 내려가는 구간(0 쓰기)에서 시간 격자 때문에 생기는 위상 차이"],
+    ["쓰기 V(SN), 1 ps 격자", f"{wn['sn_1ps']*1e3:.3f} mV", "격자를 10배 촘촘히 하면 사라짐: 모델 차이가 아니라 시간 격자 효과"],
+    ["전하 공유 (저장값 1) BL / SN", f"{sn_['bl']*1e3:.3f} / {sn_['sn']*1e3:.3f} mV", "5 ps 격자, 0–6 ns"],
+    ["센스앰프 읽기 사이클 (저장값 1, 0)", f"{max(c1['ng'].values())*1e3:.2f} / {max(c0['ng'].values())*1e3:.2f} mV", "BL, BLB, SN 중 최대, 5 ps 격자, 0–14 ns"],
+    ["유지 시간(ODE)", "비교 못 함", "EKV 서브문턱 누설을 미분방정식으로 푼 것이라 비교 대상이 없음. 대신 JavaScript 구현과 Python 구현이 단계별로 같은지만 테스트함"]])}
+<p>쓰기·읽기는 Level 1이라 ngspice와 같은 식이어서 서로 일치하는 것이 기대됩니다. 이것은 <b>구현이 맞다</b>는 확인이지, 모델이 실제 DRAM과 같다는 뜻이 아닙니다.</p>
+{box("warn", "이 레슨의 한계", "<ul><li>Cs, Cbl, 전압, 소자 크기, n, Ij는 가상의 값입니다. 실제 DRAM의 용량·전압·누설과 다릅니다.</li><li>Level 1에는 문턱 아래 전류, 단채널 효과, 몸체 효과(γ = 0)가 없어 쓰기·읽기 속도는 방향만 의미가 있습니다. 액세스 트랜지스터의 Vth는 상수로 두었고 몸체 효과로 인한 Vth 상승은 없습니다.</li><li>유지: 누설 경로는 서브문턱과 단순한 접합 항뿐입니다(GIDL, 셀 간 간섭, 온도 의존성 없음). 외부 시뮬레이터와 비교하지 못했습니다.</li><li>셀을 접지 플레이트 기준으로 두었고, 인접 비트라인 결합, 워드라인 저항·지연, 센스앰프 오프셋의 통계적 분포는 없습니다.</li><li>시각화의 센스앰프는 이상화한 래치(지수 재생 + 오프셋)이고 트랜지스터 수준의 결과는 11.4의 표입니다. minispice에는 .ic가 없어 시각화의 초기 상태는 equalize 트랜지스터 대신 직접 지정했습니다(같은 결과: 테스트로 확인).</li></ul>")}
+{box("ok", "요약", "<ul><li>1T1C 셀: WL = 액세스 NMOS의 게이트, BL = 드레인 접점, SN + Cs = 정보 저장.</li><li>저장 레벨은 min(Vdd, Vpp − Vth)라서 Vpp를 승압해야 1을 완전히 쓴다.</li><li>읽기는 전하 공유 ΔV = (Vcell − ½Vdd)·Cs/(Cs + Cbl)로 신호가 작고(여기서 86 mV), 셀을 파괴하므로 센스앰프가 증폭하며 복원한다. 재생 시정수 τ = Cbl/(gmn + gmp).</li><li>유지 시간은 누설에 반비례하고 Vth에 지수적으로 민감하며, 음의 워드라인이나 높은 Vth로 늘릴 수 있지만 접합 누설이 바닥을 만든다.</li></ul>")}
+<h3>출처</h3>
+{_srcs(SRC_DRAM)}
+<p class="run">직접 해 보기: <code>python examples/lesson11_dram.py</code> (ngspice가 있으면 교차검증까지 실행)</p></section>"""
+    return s

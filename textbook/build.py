@@ -17,7 +17,7 @@ sys.path.insert(0, str(HERE))
 import lessons  # noqa: E402
 
 SCRIPTS = ["lesson1_single_mosfet.py", "lesson2_newton.py", "lesson3_transient.py", "lesson4_inverter.py",
-           "lesson5_ekv.py", "lesson6_charge.py", "lesson7_ngspice.py", "lesson8_osdi.py", "lesson9_finfet.py", "lesson10_gaa.py"]
+           "lesson5_ekv.py", "lesson6_charge.py", "lesson7_ngspice.py", "lesson8_osdi.py", "lesson9_finfet.py", "lesson10_gaa.py", "lesson11_dram.py"]
 
 
 def run_all():
@@ -37,7 +37,7 @@ def run_tests():
     return (int(m.group(1)) if m else 0), (int(f.group(1)) if f else 0)
 
 
-JS_FILES = ["core.js", "ui.js", "scene3d.js", "schem.js", "ia_core.js", "ia_l1_4.js", "ia_l5_10.js", "ia_l7.js", "boot.js"]
+JS_FILES = ["core.js", "ui.js", "scene3d.js", "schem.js", "ia_core.js", "ia_l1_4.js", "ia_l5_10.js", "ia_l7.js", "ia_l11.js", "boot.js"]
 
 
 def interactive_assets():
@@ -103,10 +103,11 @@ def intro(passed, failed, ng):
         ["7", "ngspice 교차검증", "Level 1", f"ngspice {ng}와 같은 netlist 비교", S["ok"]],
         ["8", "Verilog-A / OSDI", "EKV (VA)", "<b>실행하지 못함</b>. 절차와 소스만 수록", S["no"]],
         ["9", "FinFET", "EKV + DIBL", "구조·기하는 계산, 설계 경험칙은 강의자료. <b>n, η, fin 폭은 가상의 예시값</b>", S["part"]],
-        ["10", "GAA / 나노시트", "EKV + DIBL", "기하 유도와 방향성 계산. <b>나노시트 치수, n, η는 가상의 예시값</b>", S["part"]]]
+        ["10", "GAA / 나노시트", "EKV + DIBL", "기하 유도와 방향성 계산. <b>나노시트 치수, n, η는 가상의 예시값</b>", S["part"]],
+        ["11", "DRAM 1T1C 셀", "Level 1 (쓰기·읽기) + EKV (유지)", "전하 공유는 손 계산 = minispice = ngspice(≤0.2 mV), 센스앰프 τ는 소신호 손 계산과 일치. <b>유지 시간은 외부 비교 없는 ODE, Cs·Cbl·누설 값은 가상의 예시값</b>", S["part"]]]
     s = f"""
 <section id="intro" class="plain"><h2><span class="num">0</span>시작하기</h2>
-<p>이 교재는 <b>SPICE를 처음 접하는 사람</b>이 평면형(planar) MOSFET의 compact model을 직접 계산해 보면서 SPICE가 회로를 푸는 방식을 이해하도록 만들었고, 마지막에는 FinFET과 GAA(나노시트)로 확장합니다. 직접 만든 작은 SPICE(<code>minispice</code>, Python)를 쓰고, 마지막에는 실제 시뮬레이터(ngspice)와 비교합니다.</p>
+<p>이 교재는 <b>SPICE를 처음 접하는 사람</b>이 평면형(planar) MOSFET의 compact model을 직접 계산해 보면서 SPICE가 회로를 푸는 방식을 이해하도록 만들었고, 뒤에서는 FinFET과 GAA(나노시트), 그리고 DRAM 셀로 확장합니다. 직접 만든 작은 SPICE(<code>minispice</code>, Python)를 쓰고, 마지막에는 실제 시뮬레이터(ngspice)와 비교합니다.</p>
 <p>모든 레슨은 같은 순서입니다: <b>회로도 → 손 계산 → 코드·시뮬레이션 → 그래프 → 요약</b>. 본문의 숫자는 이 페이지를 만들 때 코드를 실제로 실행해서 넣은 값입니다.</p>\n<p><b>직접 조작해 보기</b>: 레슨 8을 뺀 모든 레슨에는 슬라이더로 입력을 바꾸면 <b>3D 구조와 회로도에서 전압(색)과 전류(움직이는 점의 방향·속도·크기)가 바뀌는</b> 시각화가 있습니다. 모델은 브라우저의 JavaScript로 다시 구현한 것이고, 테스트(<code>tests/test_js_parity.py</code>)가 minispice(Python)와 같은 값을 내는지 확인합니다. 3D 안의 채널 전위 분포는 모델 식에서 유도한 근사이고 TCAD 결과가 아닙니다.</p>
 <h3>전체 지도와 검증 상태</h3>
 {lessons.tbl(["레슨", "주제", "모델", "무엇과 비교했나", "상태"], rows)}
@@ -138,8 +139,9 @@ def appendix(passed, failed):
 <li><b>전하 모델</b>: 공핍·축적(벌크) 전하 없음, 용량 행렬은 수치 미분. n &gt; 1에서 Cgb &lt; 0.</li>
 <li><b>솔버</b>: 조밀(dense) 행렬이라 수백 노드까지. gmin = 10⁻¹² S 고정. 초기조건(.ic, UIC) 미지원이라 링 오실레이터는 전류 펄스로 기동. 수렴 보조는 전압 스텝 제한, gmin/source stepping, 시간 스텝 분할만 있음.</li>
 <li><b>ngspice 비교</b>는 Level 1만. EKV·전하 모델의 외부 대조는 아직 없음(레슨 8).</li>
-<li><b>인터랙티브 시각화</b>: 3D 안의 채널 전위·전하 분포는 compact model 식에서 유도한 근사이며 TCAD 결과가 아닙니다(소스·드레인·게이트는 단자 전압 그대로). 전류 점의 개수·속도는 로그 스케일의 표시용이라 실제 속도에 비례하지 않습니다. 레슨 7은 미리 계산해 둔 ngspice 결과 위에서 커서를 움직이는 것이고 ngspice를 브라우저에서 실행하지 않으며, 링 오실레이터 회로도에는 전류 점이 없습니다(저장된 것이 노드 전압뿐). 레슨 8에는 시각화가 없습니다.</li>
-<li><b>FinFET·GAA(레슨 9, 10)</b>: 모델은 평면형과 같은 EKV에 DIBL 계수를 더한 것이고, n·η·fin/시트 치수는 가상의 예시값입니다. 3차원 정전기, 양자 효과, 기생 소자는 없고, 자연 길이 이론(L 의존성)은 공식을 확인하지 못해 다루지 않았습니다.</li></ul>
+<li><b>인터랙티브 시각화</b>: 3D 안의 채널 전위·전하 분포는 compact model 식에서 유도한 근사이며 TCAD 결과가 아닙니다(소스·드레인·게이트는 단자 전압 그대로). 전류 점의 개수·속도는 로그 스케일의 표시용이라 실제 속도에 비례하지 않습니다. 레슨 7은 미리 계산해 둔 ngspice 결과 위에서 커서를 움직이는 것이고 ngspice를 브라우저에서 실행하지 않으며, 링 오실레이터 회로도에는 전류 점이 없습니다(저장된 것이 노드 전압뿐). 레슨 8에는 시각화가 없습니다. 레슨 11의 센스앰프는 이상화한 래치(지수 재생 + 오프셋)이고, 트랜지스터 수준 결과는 본문 표에 있습니다.</li>
+<li><b>FinFET·GAA(레슨 9, 10)</b>: 모델은 평면형과 같은 EKV에 DIBL 계수를 더한 것이고, n·η·fin/시트 치수는 가상의 예시값입니다. 3차원 정전기, 양자 효과, 기생 소자는 없고, 자연 길이 이론(L 의존성)은 공식을 확인하지 못해 다루지 않았습니다.</li>
+<li><b>DRAM(레슨 11)</b>: 쓰기·읽기는 Level 1(문턱 아래 전류 없음)이고 유지 시간은 EKV 누설 ODE입니다. 누설은 서브문턱과 단순한 접합 항뿐이고(GIDL, 온도, 셀 간 편차 없음) 외부 시뮬레이터와 비교하지 못했습니다. Cs, Cbl, 전압, 누설 파라미터는 가상의 값입니다. minispice에 .ic가 없어 초기 셀 값은 equalize 트랜지스터로 설정했습니다.</li></ul>
 <h3>B. 개발 중 발견하고 고친 문제</h3>
 <ol>
 <li><b>펄스 에지와 trapezoidal</b>: 에지가 시간 스텝 중간에 있으면 첫 스텝 결과가 정확히 절반이 되었습니다 → 소스 꺾임점에 시간 점을 맞추도록 수정(레슨 3).</li>
@@ -148,7 +150,10 @@ def appendix(passed, failed):
 <li><b>전하 모델의 단자 순서 오류와 무의미한 테스트</b>: 링이 오히려 빨라지는 결과로 발견했고, 용량 테스트가 허용오차 때문에 항상 통과하고 있었습니다 → 수정하고 테스트를 무차원으로 다시 작성(레슨 6).</li>
 <li><b>자연 길이 공식</b>: 레슨 9·10을 위해 원문(Berkeley 슬라이드, IEEE 논문, Nature 리뷰)을 읽으려 했지만 공식을 정확히 얻지 못했습니다(링크 404, 로그인 필요, 슬라이드 글자 깨짐) → 기억에 의존해 쓰지 않고, 원문에서 확인된 설계 경험칙만 사용했습니다.</li>
 <li><b>인터랙티브 위젯의 해 찾기 오류</b>: 레슨 10 위젯에서 감소 함수에 이분법을 써서 스위칭 문턱 Vm이 10²³ V로 튀고 인버터 이득이 0.96으로 나왔습니다. JS 모델을 Python과 대조하는 테스트는 모델 코드만 검사해서 이를 잡지 못했고, 화면의 범례 숫자가 이상해 보여서 발견했습니다 → 이분법이 해를 못 찾으면 NaN을 돌려주게 하고, 위젯이 계산한 값을 Python 결과와 대조하는 테스트(<code>tests/test_ia_widgets.py</code>)를 추가했습니다. 버그를 다시 넣으면 테스트가 실패하는 것도 확인했습니다. 같은 작업에서 EKV 채널 전위 프로파일의 드레인 끝점이 수치 상쇄로 18 V까지 튀는 문제도 대조 테스트가 잡아서 고쳤습니다.</li>
-<li><b>DIBL 테스트의 가정</b>: 문턱 근처 Vgs에서 “약반전 근사”로 검사했다가 실패했습니다 → 근사가 성립하는 깊은 약반전으로 옮기고, 정확한 등가성(<code>Id(vgs, vds) = Id(vgs + η·vds, vds)</code>) 검사를 따로 두었습니다.</li></ol>
+<li><b>DIBL 테스트의 가정</b>: 문턱 근처 Vgs에서 “약반전 근사”로 검사했다가 실패했습니다 → 근사가 성립하는 깊은 약반전으로 옮기고, 정확한 등가성(<code>Id(vgs, vds) = Id(vgs + η·vds, vds)</code>) 검사를 따로 두었습니다.</li>
+<li><b>그래프의 로그 축 설정이 남던 문제</b>: 레슨 11 위젯을 만들다가, 로그 축 그래프를 그린 뒤 같은 그래프 객체로 선형 그래프를 그리면 로그 설정이 남아 예외가 나는 것을 발견했습니다. 레슨 4 위젯의 DC ↔ 과도 전환에서도 같은 예외가 날 수 있었습니다(재현 확인). 고친 뒤, 처음 만든 회귀 테스트는 레슨 4 값이 바뀐 상태에서는 예외가 나지 않아 <b>버그가 있어도 통과</b>했습니다 → 값에 의존하지 않는 형태(Plot 객체의 축 설정이 다음 그리기로 넘어가지 않는지)로 다시 작성하고, 버그를 되돌리면 실패하는 것을 확인했습니다.</li>
+<li><b>센스앰프 시정수의 손 계산 대 시뮬레이션</b>: 손 계산 73 ps, 첫 시뮬레이션 맞춤 90 ps로 25 % 달랐습니다. 래치를 빠르게 켜서 소신호 구간만 맞추니 73 ps로 일치해서, 차이는 진폭이 커지며 gm이 줄어드는 대신호 효과였습니다(레슨 11).</li>
+<li><b>JS 시뮬레이션 변조 테스트</b>: DRAM 위젯의 JS 구현이 minispice와 같은지 보는 테스트(<code>test_js_parity.py</code>)가 실제로 오류를 잡는지, 용량 전류식·Cbl·쓰기 레벨을 일부러 틀리게 바꿔 보아 실패하는 것을 확인했습니다. (처음 시도한 변조 하나는 아무것도 바꾸지 않는 코드여서 의미가 없었고 다른 변조로 대체했습니다.)</li></ol>
 <h3>C. 코드 지도</h3>
 {lessons.tbl(["경로", "내용"], [
     ["<code>minispice/models.py</code>", "Level1, EKV(전류 + 전하). 공통 인터페이스 <code>evaluate()</code>, <code>charges()</code>"],
@@ -157,6 +162,7 @@ def appendix(passed, failed):
     ["<code>minispice/netlist.py</code>", "SPICE 문법 파서 (R C V I M, .model .op .dc .tran, PULSE)"],
     ["<code>examples/lessonN_*.py</code>", "레슨별 스크립트(수치 출력 + 그림)"],
     ["<code>examples/va/ekv_simple.va</code>", "레슨 8의 Verilog-A (미컴파일)"],
+    ["<code>examples/dram_retention.py</code>, <code>ngspice_util.py</code>", "레슨 11의 유지 시간 ODE(테스트와 공유), ngspice 실행 공용 함수"],
     ["<code>examples/draw_multigate.py</code>", "FinFET·GAA의 3차원 구조도와 단면도"],
     ["<code>textbook/js/</code>", "인터랙티브 시각화(외부 라이브러리 없음): core.js(모델), scene3d.js(3D), schem.js(회로도), ia_*.js(레슨별 위젯)"],
     ["<code>tests/</code>", f"테스트 {passed}개 (모델·전하·회로, JS 모델 대조 <code>test_js_parity.py</code>, 위젯 값 대조 <code>test_ia_widgets.py</code>)"],
@@ -170,19 +176,19 @@ def main():
     passed, failed = run_tests()
     ng = lessons.J(7)["ngspice_version"]
     nav = [("intro", "시작하기")] + [(f"l{n}", f"{n}. {t}") for n, t in
-           ((1, "NMOS 하나"), (2, "Newton"), (3, "Transient"), (4, "CMOS 인버터"), (5, "EKV"), (6, "전하 모델"), (7, "ngspice"), (8, "OSDI"), (9, "FinFET"), (10, "GAA"))] + [("resources", "추천 자료"), ("appendix", "부록")]
+           ((1, "NMOS 하나"), (2, "Newton"), (3, "Transient"), (4, "CMOS 인버터"), (5, "EKV"), (6, "전하 모델"), (7, "ngspice"), (8, "OSDI"), (9, "FinFET"), (10, "GAA"), (11, "DRAM"))] + [("resources", "추천 자료"), ("appendix", "부록")]
     toc = "".join(f'<li><a href="#{a}">{t}</a></li>' for a, t in nav)
     body = intro(passed, failed, ng) + "".join(f() for f in (lessons.lesson1, lessons.lesson2, lessons.lesson3, lessons.lesson4,
-                                                             lessons.lesson5, lessons.lesson6, lessons.lesson7, lessons.lesson8, lessons.lesson9, lessons.lesson10)) + lessons.resources() + appendix(passed, failed)
+                                                             lessons.lesson5, lessons.lesson6, lessons.lesson7, lessons.lesson8, lessons.lesson9, lessons.lesson10, lessons.lesson11)) + lessons.resources() + appendix(passed, failed)
     ia_css, ia_js, ia_data = interactive_assets()
     today = datetime.date.today().isoformat()
     page = f"""<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SPICE로 배우는 MOSFET Compact Model</title>
-<meta name="description" content="평면형 MOSFET compact model을 직접 계산하며 SPICE가 회로를 푸는 방식을 배우고 FinFET·GAA로 확장하는 10개 레슨">
+<meta name="description" content="평면형 MOSFET compact model을 직접 계산하며 SPICE가 회로를 푸는 방식을 배우고 FinFET·GAA로 확장하고 DRAM 셀까지 다루는 11개 레슨">
 <style>{CSS}\n{ia_css}</style></head><body>
 <header class="hero"><h1>SPICE로 배우는 MOSFET Compact Model</h1>
-<p>평면형(planar) MOSFET을 한 개부터 풀어 보며 SPICE가 방정식을 푸는 방식, 모델의 의미, 실제 시뮬레이터와의 비교, 그리고 FinFET과 GAA까지. 총 10개 레슨.</p>
+<p>평면형(planar) MOSFET을 한 개부터 풀어 보며 SPICE가 방정식을 푸는 방식, 모델의 의미, 실제 시뮬레이터와의 비교, 그리고 FinFET·GAA, DRAM 셀(워드라인·비트라인·저장 커패시터)까지. 총 11개 레슨.</p>
 <p>생성: {today} · Python minispice · ngspice {ng}</p></header>
 <nav class="toc"><ul>{toc}</ul></nav>
 <main>{body}</main>
