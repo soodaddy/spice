@@ -312,12 +312,13 @@
    *  and a junction leakage; fixed voltage step dv. vbl: null = worst case (0 V for a stored 1, Vdd for a stored 0), 'pre' = Vdd/2, or a number. */
   function dramRetention(q) {
     const m = makeModel('ekv', 1, { vto: q.vth, kp: 300e-6, n: q.n, lambda: 0.05 }), w = q.wlr * 1e-7, l = 1e-7, dv = q.dv || 1e-3, tmax = q.tmax || 1e6;
-    const vh = Math.min(q.vdd, q.vpp - q.vth), vb = q.vbl == null ? (q.data1 ? 0 : q.vdd) : q.vbl === 'pre' ? q.vdd / 2 : q.vbl;
+    const vh = Math.min(q.vdd, q.vpp - q.vth), vb = q.vbl == null || q.duty != null ? (q.data1 ? 0 : q.vdd) : q.vbl === 'pre' ? q.vdd / 2 : q.vbl;
     const vlim = q.data1 ? q.vdd / 2 + q.voff * (q.cs + q.cbl) / q.cs : q.vdd / 2 - q.voff * (q.cs + q.cbl) / q.cs;
     let v = q.data1 ? vh : 0, t = 0, step = 0, tret = Infinity; const ts = [0], vs = [v];
     if (q.data1 ? v <= vlim : v >= vlim) return { tret: 0, ts, vs, vh, vlim, vbl: vb };   // written level already beyond the sensing limit
     while (t < tmax) {
-      const ileave = -evaluate(m, vb, q.vwl, v, 0, w, l).id, itot = v > 0 ? ileave + q.ij * (1 - Math.exp(-v / VT)) : ileave;
+      // q.duty (lesson 12): fraction of the time the bit line sits at the active level (0 V for a stored 1, Vdd for a stored 0) because neighbour cells are accessed; the rest of the time Vdd/2
+      const ileave = q.duty != null ? q.duty * -evaluate(m, vb, q.vwl, v, 0, w, l).id + (1 - q.duty) * -evaluate(m, q.vdd / 2, q.vwl, v, 0, w, l).id : -evaluate(m, vb, q.vwl, v, 0, w, l).id, itot = v > 0 ? ileave + q.ij * (1 - Math.exp(-v / VT)) : ileave;
       if (Math.abs(itot) < 1e-30) break;
       const dtt = dv * q.cs / Math.abs(itot), vn = v - Math.sign(itot) * dv;
       if (q.data1 ? vn <= vlim : vn >= vlim) { tret = t + dtt * Math.abs(vlim - v) / dv; ts.push(tret); vs.push(vlim); break; }
@@ -325,6 +326,96 @@
       if (step % 25 === 0) { ts.push(t); vs.push(v); }
     }
     return { tret, ts, vs, vh, vlim, vbl: vb };
+  }
+
+  /** dense linear solve (Gaussian elimination, partial pivoting); null if singular */
+  function solveDense(A, b) {
+    const n = b.length, M = A.map((r, i) => r.concat([b[i]]));
+    for (let c = 0; c < n; c++) {
+      let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+      if (Math.abs(M[p][c]) < 1e-30) return null;
+      [M[c], M[p]] = [M[p], M[c]];
+      for (let r = c + 1; r < n; r++) { const f = M[r][c] / M[c][c]; for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]; }
+    }
+    const x = new Array(n).fill(0);
+    for (let r = n - 1; r >= 0; r--) { let t = M[r][n]; for (let k = r + 1; k < n; k++) t -= M[r][k] * x[k]; x[r] = t / M[r][r]; }
+    return x;
+  }
+
+  /**
+   * Transient of n unknown nodes (newton, dense Jacobian); all capacitors go to ground. spec.dev(x, t) -> {f, J}: currents leaving each node into the
+   * devices and their derivatives; spec.caps = [{c, node}]; spec.init = [...]. Same time grid, corner breakpoints and step splitting as transient2.
+   * Returns {t, v: [array per node]}.
+   */
+  function transientN(spec) {
+    const trap = spec.method === 'trap', nn = spec.init.length;
+    let x = spec.init.slice();
+    const caps = spec.caps.map((c) => ({ c: c.c, node: c.node, vc: x[c.node], i: 0 }));
+    const out = { t: [0], v: x.map((q) => [q]) };
+    const corners = (spec.breakpoints || []).slice().sort((a, b) => a - b), n = Math.round(spec.tstop / spec.tstep), eps = 1e-6 * spec.tstep;
+    const attempt = (t0, t1) => {
+      const h = t1 - t0, a = (trap ? 2 : 1) / h; let v = x.slice();
+      for (let it = 0; it < 60; it++) {
+        const d = spec.dev(v, t1), f = d.f.slice(), J = d.J.map((r) => r.slice());
+        for (const c of caps) { f[c.node] += a * c.c * (v[c.node] - c.vc) - (trap ? c.i : 0); J[c.node][c.node] += a * c.c; }
+        let dx = solveDense(J, f.map((q) => -q));
+        if (!dx) return null;
+        const m = Math.max(...dx.map(Math.abs));
+        if (!isFinite(m)) return null;
+        if (m > 0.5) dx = dx.map((q) => q * 0.5 / m);
+        v = v.map((q, k) => q + dx[k]);
+        if (m < 1e-12) return { v, a };
+      }
+      return null;
+    };
+    const advance = (t0, t1, depth) => {
+      const r = attempt(t0, t1);
+      if (r) { for (const c of caps) { const vc = r.v[c.node]; c.i = r.a * c.c * (vc - c.vc) - (trap ? c.i : 0); c.vc = vc; } x = r.v; return; }
+      if (depth >= 12) throw new Error('transientN did not converge near t=' + t1);
+      const mid = 0.5 * (t0 + t1); advance(t0, mid, depth + 1); advance(mid, t1, depth + 1);
+    };
+    for (let k = 1; k <= n; k++) {
+      const t0 = (k - 1) * spec.tstep, t1 = k * spec.tstep, inside = corners.filter((q) => q > t0 + eps && q < t1 - eps), pts = [t0].concat(inside, [t1]);
+      for (let j = 0; j + 1 < pts.length; j++) advance(pts[j], pts[j + 1], 0);
+      out.t.push(t1); x.forEach((q, i) => out.v[i].push(q));
+    }
+    return out;
+  }
+
+  /**
+   * Lesson 12: n cells (access NMOS + storage node Cs) on ONE bit line, read with an ideal regenerative sense amplifier as in dramSim.
+   * q = {n, bits[], sel[] (word lines raised), vdd, vpp, vth, wlr, cs, cw, cj, voff (signed: + pushes the decision towards 0), gmsa, vwloff, method, dt}.
+   * Cbl = cw + n*cj. Unselected cells keep their level (Level 1: the open access transistor does not conduct).
+   * Phase A (0-4 ns): bit line floating at Vdd/2, charge sharing of the selected cells (1 + |sel| unknown nodes). Phase B: the sense amplifier drives BL and
+   * rewrites every selected cell with the SAME decision (two selected cells holding different bits are corrupted).
+   */
+  function arraySim(q) {
+    const m = makeModel('level1', 1, { vto: q.vth, kp: 300e-6, lambda: 0.05 }), w = q.wlr * 1e-7, l = 1e-7, dt = q.dt || 10e-12, tstop = 12e-9, tsa = 4e-9, method = q.method || 'trap';
+    const n = q.n, cbl = q.cw + n * q.cj, vh = Math.min(q.vdd, q.vpp - q.vth), vblp = q.vdd / 2, wloff = q.vwloff || 0, sel = q.sel, nA = Math.round(tsa / dt);
+    const wlp = pulse({ v1: wloff, v2: q.vpp, td: 1e-9, tr: 0.2e-9, tf: 0.2e-9, pw: 8e-9, per: 1e-6 }), bps = wlp.breakpoints(tstop), N = Math.round(tstop / dt);
+    const t = Array.from({ length: N + 1 }, (_, k) => k * dt), lvl0 = q.bits.map((b) => (b ? vh : 0)), isSel = (k) => sel.includes(k);
+    const nodes = 1 + sel.length;
+    const ra = transientN({ method, tstep: dt, tstop: tsa, breakpoints: bps.filter((x) => x < tsa), init: [vblp].concat(sel.map((k) => lvl0[k])),
+      dev: (x, tt) => {
+        const f = new Array(nodes).fill(0), J = Array.from({ length: nodes }, () => new Array(nodes).fill(0)), vg = wlp.value(tt);
+        sel.forEach((k, j) => { const e = evaluate(m, x[0], vg, x[j + 1], 0, w, l); f[0] += e.id; f[j + 1] -= e.id; J[0][0] += e.gd; J[0][j + 1] += e.gs; J[j + 1][0] -= e.gd; J[j + 1][j + 1] -= e.gs; });
+        return { f, J };
+      }, caps: [{ c: cbl, node: 0 }].concat(sel.map((k, j) => ({ c: q.cs, node: j + 1 }))) });
+    const A0 = ra.v[0][nA] - vblp, cm = vblp + A0 / 2, tau = cbl / q.gmsa, deff = A0 - q.voff, bit = deff > 0 ? 1 : 0;
+    const blOf = (tt) => { const e = Math.exp(Math.min((tt - tsa) / tau, 700)), D = q.voff + deff * e; return clamp(cm + D / 2, 0, q.vdd); };
+    const bl = ra.v[0].slice(0, nA).concat(t.slice(nA).map(blOf)), sn = lvl0.map((v0) => new Array(N + 1).fill(v0));
+    sel.forEach((k, j) => {
+      const rb = transient1({ method, tstep: dt, tstop: tstop - tsa, breakpoints: bps.filter((x) => x > tsa).map((x) => x - tsa), vmin: -1, vmax: q.vdd + 1, v0: ra.v[j + 1][nA],
+        dev: (v, tt) => ({ i: -evaluate(m, blOf(tsa + tt), wlp.value(tsa + tt), v, 0, w, l).id, g: 0 }), caps: [{ c: q.cs, other: () => 0 }] });
+      for (let i = 0; i <= nA; i++) sn[k][i] = ra.v[j + 1][i];
+      for (let i = nA; i <= N; i++) sn[k][i] = rb.v[i - nA];
+    });
+    const blb = t.map((x, k) => (x < tsa ? vblp : clamp(2 * cm - bl[k], 0, q.vdd)));
+    const wl = sn.map((_, k) => t.map((x) => (isSel(k) ? wlp.value(x) : wloff)));
+    const iacc = sn.map((s, k) => t.map((x, i) => evaluate(m, bl[i], wl[k][i], s[i], 0, w, l).id));
+    const icbl = bl.map((x, k) => (k ? cbl * (x - bl[k - 1]) / dt : 0));
+    const final = sn.map((s) => s[N]), corrupted = sel.filter((k) => (final[k] > vblp ? 1 : 0) !== q.bits[k]);
+    return { t, wl, bl, blb, sn, iacc, icbl, cbl, vh, dt, tsa, dv: A0, bit, tau, final, corrupted, ok: sel.every((k) => q.bits[k] === bit), lvl0 };
   }
 
   // ------------------------------------------------------------------ formatting
@@ -338,6 +429,6 @@
     return (x / best[0]).toPrecision(digits).replace(/\.?0+$/, (m) => (m.includes('.') ? '' : m)) + ' ' + best[1] + unit;
   }
 
-  const API = { VT, clamp, makeModel, evaluate, charges, chargeJac, channelProfile, bisect, newton1, pulse, transient1, transient2, dramSim, dramRetention, si, ekvF, ekvFinv, qOfI, level1Core, ekvCore };
+  const API = { VT, clamp, makeModel, evaluate, charges, chargeJac, channelProfile, bisect, newton1, pulse, transient1, transient2, transientN, arraySim, dramSim, dramRetention, solveDense, si, ekvF, ekvFinv, qOfI, level1Core, ekvCore };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else G.MS = API;
 })(typeof window !== 'undefined' ? window : globalThis);

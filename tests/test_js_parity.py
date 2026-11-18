@@ -81,7 +81,8 @@ def _dram_reference():
     import sys
     sys.path.insert(0, str(ROOT / "examples"))
     from dram_retention import retention
-    out = {"write": [], "share": [], "ret": []}
+    from dram_array import share_net as arr_net
+    out = {"write": [], "share": [], "ret": [], "array": []}
     for vpp, vth in ((2.0, 0.7), (1.9, 0.7), (1.2, 0.7), (2.5, 0.6)):
         net = (f"t\n.model nacc nmos level=1 vto={vth} kp=300u lambda=0.05\nVbl bl 0 PULSE(0 1.2 0.5n 0.1n 0.1n 8n 40n)\nVwl wl 0 PULSE(0 {vpp} 1n 0.2n 0.2n 16n 40n)\n"
                "M1 bl wl sn 0 nacc W=0.1u L=0.1u\nCs sn 0 25f\n.end\n")
@@ -98,6 +99,15 @@ def _dram_reference():
     for vth, vwl, d1, vbl in ((0.5, 0.0, True, None), (0.7, 0.0, True, None), (0.5, -0.3, True, None), (0.6, 0.0, True, "pre"), (0.5, 0.0, False, None), (0.7, -0.2, True, None)):
         r = retention(vth, vwl, d1, vbl=vbl)
         out["ret"].append(dict(vth=vth, vwl=vwl, data1=d1, vbl=vbl, tret=None if r["tret"] == float("inf") else r["tret"], v_end=r["vs"][-1], n=len(r["ts"])))
+    for vth, vwl, d1, duty, cbl in ((0.6, 0.0, True, 0.375, 165e-15), (0.5, 0.0, True, 0.25, 155e-15), (0.7, -0.1, True, 1.0, 165e-15), (0.5, 0.0, False, 0.5, 155e-15)):   # lesson 12: neighbour activity
+        r = retention(vth, vwl, d1, duty=duty, cbl=cbl)
+        out["ret"].append(dict(vth=vth, vwl=vwl, data1=d1, vbl=None, duty=duty, cbl=cbl, tret=None if r["tret"] == float("inf") else r["tret"], v_end=r["vs"][-1], n=len(r["ts"])))
+    # lesson 12: N cells on one bit line, charge sharing of 1, 2 or 3 selected cells (same netlist as examples/dram_array.py)
+    for bits, sel, vpp, cs, cw, cj in (([1, 0], [0], 2.0, 25e-15, 145e-15, 5e-15), ([1, 0, 1, 1], [1], 2.0, 25e-15, 145e-15, 5e-15), ([1, 1], [0, 1], 2.5, 25e-15, 145e-15, 5e-15),
+                                       ([1, 1, 0, 0], [0, 1, 2], 2.0, 18e-15, 100e-15, 12e-15), ([0, 1, 0, 1], [3], 2.0, 40e-15, 200e-15, 2e-15)):
+        r = transient(parse(arr_net(bits, sel, cs=cs, cw=cw, cj=cj, vpp=vpp))[0], 10e-12, 3.9e-9)
+        idx = list(range(110, len(r.axis), 10))
+        out["array"].append(dict(bits=bits, sel=sel, vpp=vpp, cs=cs, cw=cw, cj=cj, idx=idx, bl=[float(r["v(bl)"][i]) for i in idx], sn=[[float(r[f"v(sn{k})"][i]) for i in idx] for k in range(len(bits))]))
     return out
 
 
@@ -112,7 +122,8 @@ def test_js_dram_matches_minispice(tmp_path):
     assert out["share"]["max_abs_dv"] < 5e-4, out["share"]
     assert out["write"]["cases"] == 4 and out["share"]["cases"] == 3
     assert out["ret"]["max_rel_dt"] is not None and out["ret"]["max_rel_dt"] < 1e-9, out["ret"]                         # the JS retention ODE mirrors the Python one step by step
-    assert out["ret"]["cases"] == 6 and out["ret"]["finite_cases"] == 5
+    assert out["ret"]["cases"] == 10 and out["ret"]["finite_cases"] == 8
+    assert out["array"]["cases"] == 5 and out["array"]["max_abs_dv"] < 5e-4, out["array"]                  # lesson 12: transientN with 1 + m unknown nodes
 
 
 def test_js_port_matches_minispice(tmp_path):

@@ -24,10 +24,10 @@ CHROME = next((c for c in ("/Applications/Google Chrome.app/Contents/MacOS/Googl
                            shutil.which("chromium-browser")) if c and pathlib.Path(c).exists()), None)
 pytestmark = pytest.mark.skipif(CHROME is None, reason="no headless Chrome found")
 
-JS_FILES = ["core.js", "ui.js", "scene3d.js", "schem.js", "ia_core.js", "ia_l1_4.js", "ia_l5_10.js", "ia_l7.js", "ia_l11.js"]
+JS_FILES = ["core.js", "ui.js", "scene3d.js", "schem.js", "ia_core.js", "ia_l1_4.js", "ia_l5_10.js", "ia_l7.js", "ia_l11.js", "ia_l12.js"]
 PROBE = r"""
 const errs = [], R = {}; window.addEventListener('error', (e) => errs.push('uncaught: ' + e.message));
-const IDS = ['l1','l2','l3','l4','l5','l6','l7','l9','l10','l11'];
+const IDS = ['l1','l2','l3','l4','l5','l6','l7','l9','l10','l11','l12a','l12b'];
 function W(k) { return document.getElementById('ia-' + k).__ia; }
 function setv(k, kv) { for (const id in kv) W(k).ctl[id].set(kv[id]); W(k).refresh(); return W(k).get(); }
 try {
@@ -64,6 +64,16 @@ try {
   s = setv('l11', { mode: 'ret1', vth: 0.6, vwl: 0, blhold: 'pre' }); R.l11ret3 = { tret: s.rt.r.tret };
   s = setv('l11', { mode: 'ret0', vth: 0.5, vwl: 0, blhold: 'worst' }); R.l11ret0 = { tret: s.rt.r.tret, vend: s.rt.r.vs[s.rt.r.vs.length - 1] };
   s = setv('l11', { mode: 'ret1', vth: 0.5, vpp: 1.2 }); R.l11low = { tret: s.rt.r.tret, vh: s.vh };
+  // lesson 12: N = 2 and N = 4 cells on one bit line
+  s = W('l12a').get(); R.l12a = { dv: s.sim.dv, hand: s.dvHand, bit: s.sim.bit, ok: s.sim.ok, cbl: s.cbl, unsel: Math.abs(s.sim.final[1] - s.sim.lvl0[1]), tau: s.sim.tau };
+  s = setv('l12a', { selB: '1', voff: 0.01 }); R.l12aDouble = { dv: s.sim.dv, hand: s.dvHand, bit: s.sim.bit, corrupted: s.sim.corrupted, final: s.sim.final };
+  s = setv('l12a', { selB: '1', b1: true, voff: 0 }); R.l12aSame = { dv: s.sim.dv, hand: s.dvHand, ok: s.sim.ok, corrupted: s.sim.corrupted };
+  s = W('l12b').get(); R.l12b = { dv: s.sim.dv, cbl: s.cbl, bits: s.bits };
+  s = setv('l12b', { selA: '1', t: 11 }); R.l12b1 = { dv: s.sim.dv, bit: s.sim.bit, final: s.sim.final, lvl0: s.sim.lvl0 };
+  s = setv('l12b', { cj: 20e-15, cs: 15e-15, cw: 100e-15, selA: '2', t: 3.9 }); R.l12bc = { dv: s.sim.dv, hand: s.dvHand, cbl: s.cbl };
+  s = setv('l12b', { cj: 5e-15, cs: 25e-15, cw: 145e-15, mode: 'ret', selA: '0', act: 0.5, vth: 0.7, vwl: 0, tr: 1 }); R.l12bret = { tret: s.rt.r.tret, duty: s.duty, nOther: s.nOther, vlim: s.rt.r.vlim };
+  s = setv('l12b', { selA: '1' }); R.l12bret0 = { tret: s.rt.r.tret, duty: s.duty, data1: s.data1 };
+  s = setv('l12b', { selA: '0', act: 0 }); R.l12bidle = { tret: s.rt.r.tret };
 } catch (e) { errs.push('probe: ' + e.stack); }
 document.getElementById('out').textContent = JSON.stringify({ errs, R });
 """
@@ -74,7 +84,7 @@ def _harness(tmp_path):
     css = (ROOT / "textbook" / "css" / "ia.css").read_text(encoding="utf-8")
     data = ROOT / "examples" / "out" / "lesson7_data.json"
     d7 = data.read_text(encoding="utf-8") if data.exists() else None
-    boxes = "".join(f'<div id="ia-{k}"></div>' for k in ["l1", "l2", "l3", "l4", "l5", "l6", "l7", "l9", "l10", "l11"])
+    boxes = "".join(f'<div id="ia-{k}"></div>' for k in ["l1", "l2", "l3", "l4", "l5", "l6", "l7", "l9", "l10", "l11", "l12a", "l12b"])
     page = (f"<!doctype html><meta charset=utf-8><style>:root{{--line:#ddd;--card:#fff;--acc:#123;--fg:#111;--mut:#555;--info:#eef}}body{{width:1200px}}{css}</style>"
             f"<body>{boxes}<pre id=out></pre>" + (f'<script type="application/json" id="ia-data-l7">{d7}</script>' if d7 else
                                                     '<script type="application/json" id="ia-data-l7">{"curves":{"vgs":[0.6,0.8,1.0,1.2,1.4],"vds":[0,1],"mini":[[0,1],[0,1],[0,1],[0,1],[0,1]],"ng":[[0,1],[0,1],[0,1],[0,1],[0,1]]},'
@@ -272,3 +282,36 @@ def test_lesson11(widgets):
     py0 = retention(0.5, 0.0, False)                                                  # a stored 0 does not reach its sensing limit (0.46 V) within the 1e6 s window: Vgs = -V(SN) throttles the leakage
     assert R["l11ret0"]["tret"] is None and py0["tret"] == float("inf") and abs(R["l11ret0"]["vend"] - py0["vs"][-1]) < 1e-12 and R["l11ret0"]["vend"] < py0["vlim"]
     assert R["l11low"]["tret"] == 0 and abs(R["l11low"]["vh"] - 0.7) < 1e-12            # Vpp = 1.2 V, Vth = 0.5 V -> level 0.7 V is already below the 0.74 V sensing limit
+
+
+def test_lesson12(widgets):
+    import sys
+    sys.path.insert(0, str(ROOT / "examples"))
+    from dram_array import VH, cbl_total, hand_dv
+    from dram_retention import retention
+    R = widgets["R"]
+    # N = 2, cell 0 holds 1, cell 1 holds 0, cell 0 is read: the hand formula, nothing happens to the unselected cell
+    a = R["l12a"]
+    assert abs(a["cbl"] - cbl_total(2)) < 1e-20 and abs(a["dv"] - hand_dv([VH, 0], [0], 2)) < 1e-6 and abs(a["hand"] - a["dv"]) < 1e-6 and a["bit"] == 1 and a["ok"] is True and a["unsel"] < 1e-12
+    assert abs(a["tau"] - cbl_total(2) / 2e-3) < 1e-15
+    # both word lines on, holding 1 and 0: the signals cancel, the decision (pushed by a +10 mV offset) is 0 and the 1 is destroyed
+    d = R["l12aDouble"]
+    assert abs(d["dv"]) < 1e-9 and d["bit"] == 0 and d["corrupted"] == [0] and abs(d["final"][0]) < 1e-3 and abs(d["final"][1]) < 1e-3
+    # both holding 1: twice Cs on the bit line -> 146.3 mV (hand and minispice of the lesson)
+    sm = R["l12aSame"]
+    assert abs(sm["dv"] - hand_dv([VH, VH], [0, 1], 2)) < 1e-6 and abs(sm["dv"] - 0.146341) < 1e-6 and sm["ok"] is True and sm["corrupted"] == []
+    # N = 4
+    b = R["l12b"]
+    assert abs(b["cbl"] - cbl_total(4)) < 1e-20 and b["bits"] == [1, 0, 1, 1] and abs(b["dv"] - hand_dv([VH, 0, VH, VH], [0], 4)) < 1e-6
+    b1 = R["l12b1"]
+    assert abs(b1["dv"] - hand_dv([VH, 0, VH, VH], [1], 4)) < 1e-6 and b1["bit"] == 0 and abs(b1["final"][1]) < 1e-3 and all(abs(x - y) < 1e-3 for x, y in zip(b1["final"], b1["lvl0"]))
+    c = R["l12bc"]
+    assert abs(c["dv"] - hand_dv([VH, 0, VH, VH], [2], 4, cs=15e-15, cw=100e-15, cj=20e-15)) < 1e-6 and abs(c["cbl"] - (100e-15 + 4 * 20e-15)) < 1e-20
+    # retention: victim cell 0 holds 1; of its three neighbours only cell 1 stores 0 -> f = 0.5 * 1 / 4
+    r = R["l12bret"]
+    ref = retention(0.7, 0.0, True, duty=0.125, cbl=cbl_total(4))
+    assert r["nOther"] == 1 and abs(r["duty"] - 0.125) < 1e-12 and abs(r["tret"] - ref["tret"]) / ref["tret"] < 1e-9 and abs(r["vlim"] - ref["vlim"]) < 1e-12
+    r0 = R["l12bret0"]                                                                  # victim cell 1 holds 0: neighbours holding 1 would pull the BL to Vdd (cells 0, 2, 3)
+    assert r0["data1"] is False and abs(r0["duty"] - 0.5 * 3 / 4) < 1e-12
+    idle = R["l12bidle"]
+    assert abs(idle["tret"] - retention(0.7, 0.0, True, duty=0.0, cbl=cbl_total(4))["tret"]) / idle["tret"] < 1e-9 and idle["tret"] > r["tret"]    # no neighbour activity: junction-limited (56 s), busier neighbours are shorter (42.7 s at Vth = 0.7 V)

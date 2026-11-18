@@ -15,24 +15,29 @@ KP_ACC, WL_ACC = 300e-6, 1.0                 # access transistor W/L = 0.1 um / 
 BETA = KP_ACC * WL_ACC
 
 
-def retention(vth, vwl, data1, *, vdd=VDD, vpp=VPP, n=1.3, cs=CS, cbl=CBL, voff=0.02, ij=0.2e-15, wl=WL_ACC, vbl=None, dv=1e-3, tmax=1e6, keep=400):
+def retention(vth, vwl, data1, *, vdd=VDD, vpp=VPP, n=1.3, cs=CS, cbl=CBL, voff=0.02, ij=0.2e-15, wl=WL_ACC, vbl=None, duty=None, dv=1e-3, tmax=1e6, keep=400):
     """Charge decays through the off access transistor (EKV, sub-threshold) and a junction leakage ij. Fixed voltage step dv.
 
     vbl: bit-line level while the cell holds its data. None = worst case (0 V for a stored 1, Vdd for a stored 0: the bit line is
     driven there while other cells on it are accessed - a modelling assumption); "pre" = the idle precharge level Vdd/2.
+    duty: lesson 12. The fraction of the time the bit line sits at the active level (0 V for a stored 1, Vdd for a stored 0), driven there by accesses of
+    the NEIGHBOUR cells; the rest of the time it is at Vdd/2. The leakage is the time average of the two. Overrides vbl.
     """
     m = EKV(1, dict(vto=vth, kp=300e-6, n=n, lambda_=0.05))
     w, l = wl * 1e-7, 1e-7
     vh = min(vdd, vpp - vth)
     v = vh if data1 else 0.0
-    vb = (0.0 if data1 else vdd) if vbl is None else (vdd / 2 if vbl == "pre" else vbl)
+    vb = (0.0 if data1 else vdd) if (vbl is None or duty is not None) else (vdd / 2 if vbl == "pre" else vbl)
     vlim = vdd / 2 + voff * (cs + cbl) / cs if data1 else vdd / 2 - voff * (cs + cbl) / cs
     t, ts, vs = 0.0, [0.0], [v]
     tret, step = float("inf"), 0
     if (v <= vlim) if data1 else (v >= vlim):                              # written level already beyond the sensing limit
         return dict(tret=0.0, ts=ts, vs=vs, vh=vh, vlim=vlim, vbl=vb)
     while t < tmax:
-        ileave = -m.evaluate(vb, vwl, v, 0.0, w, l)[0]                      # current leaving the storage node through the access transistor
+        if duty is None:
+            ileave = -m.evaluate(vb, vwl, v, 0.0, w, l)[0]                  # current leaving the storage node through the access transistor
+        else:
+            ileave = duty * -m.evaluate(vb, vwl, v, 0.0, w, l)[0] + (1 - duty) * -m.evaluate(vdd / 2, vwl, v, 0.0, w, l)[0]
         itot = ileave + ij * (1 - math.exp(-v / VT)) if v > 0 else ileave   # plus the junction leakage to the substrate
         if abs(itot) < 1e-30:
             break

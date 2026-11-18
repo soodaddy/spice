@@ -17,7 +17,7 @@ sys.path.insert(0, str(HERE))
 import lessons  # noqa: E402
 
 SCRIPTS = ["lesson1_single_mosfet.py", "lesson2_newton.py", "lesson3_transient.py", "lesson4_inverter.py",
-           "lesson5_ekv.py", "lesson6_charge.py", "lesson7_ngspice.py", "lesson8_osdi.py", "lesson9_finfet.py", "lesson10_gaa.py", "lesson11_dram.py"]
+           "lesson5_ekv.py", "lesson6_charge.py", "lesson7_ngspice.py", "lesson8_osdi.py", "lesson9_finfet.py", "lesson10_gaa.py", "lesson11_dram.py", "lesson12_array.py"]
 
 
 def run_all():
@@ -37,7 +37,7 @@ def run_tests():
     return (int(m.group(1)) if m else 0), (int(f.group(1)) if f else 0)
 
 
-JS_FILES = ["core.js", "ui.js", "scene3d.js", "schem.js", "ia_core.js", "ia_l1_4.js", "ia_l5_10.js", "ia_l7.js", "ia_l11.js", "boot.js"]
+JS_FILES = ["core.js", "ui.js", "scene3d.js", "schem.js", "ia_core.js", "ia_l1_4.js", "ia_l5_10.js", "ia_l7.js", "ia_l11.js", "ia_l12.js", "boot.js"]
 
 
 def interactive_assets():
@@ -104,10 +104,11 @@ def intro(passed, failed, ng):
         ["8", "Verilog-A / OSDI", "EKV (VA)", "<b>실행하지 못함</b>. 절차와 소스만 수록", S["no"]],
         ["9", "FinFET", "EKV + DIBL", "구조·기하는 계산, 설계 경험칙은 강의자료. <b>n, η, fin 폭은 가상의 예시값</b>", S["part"]],
         ["10", "GAA / 나노시트", "EKV + DIBL", "기하 유도와 방향성 계산. <b>나노시트 치수, n, η는 가상의 예시값</b>", S["part"]],
-        ["11", "DRAM 1T1C 셀", "Level 1 (쓰기·읽기) + EKV (유지)", "전하 공유는 손 계산 = minispice = ngspice(≤0.2 mV), 센스앰프 τ는 소신호 손 계산과 일치. <b>유지 시간은 외부 비교 없는 ODE, Cs·Cbl·누설 값은 가상의 예시값</b>", S["part"]]]
+        ["11", "DRAM 1T1C 셀", "Level 1 (쓰기·읽기) + EKV (유지)", "전하 공유는 손 계산 = minispice = ngspice(≤0.2 mV), 센스앰프 τ는 소신호 손 계산과 일치. <b>유지 시간은 외부 비교 없는 ODE, Cs·Cbl·누설 값은 가상의 예시값</b>", S["part"]],
+        ["12", "비트라인을 공유하는 셀 2개·4개", "Level 1 (읽기·쓰기) + EKV (유지)", "전하 공유 일반식 = minispice = ngspice(≤0.22 mV), 쓰기→읽기 순서는 ngspice와 비교(격자 의존 차이 설명). <b>이웃 접근에 의한 유지 시간은 가정(활동도)에 따른 ODE, 큰 N은 손 계산만, 값은 가상</b>", S["part"]]]
     s = f"""
 <section id="intro" class="plain"><h2><span class="num">0</span>시작하기</h2>
-<p>이 교재는 <b>SPICE를 처음 접하는 사람</b>이 평면형(planar) MOSFET의 compact model을 직접 계산해 보면서 SPICE가 회로를 푸는 방식을 이해하도록 만들었고, 뒤에서는 FinFET과 GAA(나노시트), 그리고 DRAM 셀로 확장합니다. 직접 만든 작은 SPICE(<code>minispice</code>, Python)를 쓰고, 마지막에는 실제 시뮬레이터(ngspice)와 비교합니다.</p>
+<p>이 교재는 <b>SPICE를 처음 접하는 사람</b>이 평면형(planar) MOSFET의 compact model을 직접 계산해 보면서 SPICE가 회로를 푸는 방식을 이해하도록 만들었고, 뒤에서는 FinFET과 GAA(나노시트), DRAM 셀, 그리고 비트라인을 공유하는 여러 셀로 확장합니다. 직접 만든 작은 SPICE(<code>minispice</code>, Python)를 쓰고, 마지막에는 실제 시뮬레이터(ngspice)와 비교합니다.</p>
 <p>모든 레슨은 같은 순서입니다: <b>회로도 → 손 계산 → 코드·시뮬레이션 → 그래프 → 요약</b>. 본문의 숫자는 이 페이지를 만들 때 코드를 실제로 실행해서 넣은 값입니다.</p>\n<p><b>직접 조작해 보기</b>: 레슨 8을 뺀 모든 레슨에는 슬라이더로 입력을 바꾸면 <b>3D 구조와 회로도에서 전압(색)과 전류(움직이는 점의 방향·속도·크기)가 바뀌는</b> 시각화가 있습니다. 모델은 브라우저의 JavaScript로 다시 구현한 것이고, 테스트(<code>tests/test_js_parity.py</code>)가 minispice(Python)와 같은 값을 내는지 확인합니다. 3D 안의 채널 전위 분포는 모델 식에서 유도한 근사이고 TCAD 결과가 아닙니다.</p>
 <h3>전체 지도와 검증 상태</h3>
 {lessons.tbl(["레슨", "주제", "모델", "무엇과 비교했나", "상태"], rows)}
@@ -141,6 +142,7 @@ def appendix(passed, failed):
 <li><b>ngspice 비교</b>는 Level 1만. EKV·전하 모델의 외부 대조는 아직 없음(레슨 8).</li>
 <li><b>인터랙티브 시각화</b>: 3D 안의 채널 전위·전하 분포는 compact model 식에서 유도한 근사이며 TCAD 결과가 아닙니다(소스·드레인·게이트는 단자 전압 그대로). 전류 점의 개수·속도는 로그 스케일의 표시용이라 실제 속도에 비례하지 않습니다. 레슨 7은 미리 계산해 둔 ngspice 결과 위에서 커서를 움직이는 것이고 ngspice를 브라우저에서 실행하지 않으며, 링 오실레이터 회로도에는 전류 점이 없습니다(저장된 것이 노드 전압뿐). 레슨 8에는 시각화가 없습니다. 레슨 11의 센스앰프는 이상화한 래치(지수 재생 + 오프셋)이고, 트랜지스터 수준 결과는 본문 표에 있습니다.</li>
 <li><b>FinFET·GAA(레슨 9, 10)</b>: 모델은 평면형과 같은 EKV에 DIBL 계수를 더한 것이고, n·η·fin/시트 치수는 가상의 예시값입니다. 3차원 정전기, 양자 효과, 기생 소자는 없고, 자연 길이 이론(L 의존성)은 공식을 확인하지 못해 다루지 않았습니다.</li>
+<li><b>여러 셀(레슨 12)</b>: Level 1이라 꺼진 셀은 완전한 개방이고, 이웃과의 결합·누설은 없습니다. 이웃 접근의 유지 시간 영향은 “BL이 불리한 레벨에 있는 시간 비율”이라는 가정(활동도 0.5)에 의존합니다. N = 8 이상은 손 계산입니다. 센스앰프는 쓰기 동안 격리 스위치로 떼어 놓았습니다(이 모델의 문턱 전압 때문).</li>
 <li><b>DRAM(레슨 11)</b>: 쓰기·읽기는 Level 1(문턱 아래 전류 없음)이고 유지 시간은 EKV 누설 ODE입니다. 누설은 서브문턱과 단순한 접합 항뿐이고(GIDL, 온도, 셀 간 편차 없음) 외부 시뮬레이터와 비교하지 못했습니다. Cs, Cbl, 전압, 누설 파라미터는 가상의 값입니다. minispice에 .ic가 없어 초기 셀 값은 equalize 트랜지스터로 설정했습니다.</li></ul>
 <h3>B. 개발 중 발견하고 고친 문제</h3>
 <ol>
@@ -176,19 +178,19 @@ def main():
     passed, failed = run_tests()
     ng = lessons.J(7)["ngspice_version"]
     nav = [("intro", "시작하기")] + [(f"l{n}", f"{n}. {t}") for n, t in
-           ((1, "NMOS 하나"), (2, "Newton"), (3, "Transient"), (4, "CMOS 인버터"), (5, "EKV"), (6, "전하 모델"), (7, "ngspice"), (8, "OSDI"), (9, "FinFET"), (10, "GAA"), (11, "DRAM"))] + [("resources", "추천 자료"), ("appendix", "부록")]
+           ((1, "NMOS 하나"), (2, "Newton"), (3, "Transient"), (4, "CMOS 인버터"), (5, "EKV"), (6, "전하 모델"), (7, "ngspice"), (8, "OSDI"), (9, "FinFET"), (10, "GAA"), (11, "DRAM"), (12, "셀 2·4개"))] + [("resources", "추천 자료"), ("appendix", "부록")]
     toc = "".join(f'<li><a href="#{a}">{t}</a></li>' for a, t in nav)
     body = intro(passed, failed, ng) + "".join(f() for f in (lessons.lesson1, lessons.lesson2, lessons.lesson3, lessons.lesson4,
-                                                             lessons.lesson5, lessons.lesson6, lessons.lesson7, lessons.lesson8, lessons.lesson9, lessons.lesson10, lessons.lesson11)) + lessons.resources() + appendix(passed, failed)
+                                                             lessons.lesson5, lessons.lesson6, lessons.lesson7, lessons.lesson8, lessons.lesson9, lessons.lesson10, lessons.lesson11, lessons.lesson12)) + lessons.resources() + appendix(passed, failed)
     ia_css, ia_js, ia_data = interactive_assets()
     today = datetime.date.today().isoformat()
     page = f"""<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SPICE로 배우는 MOSFET Compact Model</title>
-<meta name="description" content="평면형 MOSFET compact model을 직접 계산하며 SPICE가 회로를 푸는 방식을 배우고 FinFET·GAA로 확장하고 DRAM 셀까지 다루는 11개 레슨">
+<meta name="description" content="평면형 MOSFET compact model을 직접 계산하며 SPICE가 회로를 푸는 방식을 배우고 FinFET·GAA로 확장하고 DRAM 셀과 비트라인을 공유하는 여러 셀까지 다루는 12개 레슨">
 <style>{CSS}\n{ia_css}</style></head><body>
 <header class="hero"><h1>SPICE로 배우는 MOSFET Compact Model</h1>
-<p>평면형(planar) MOSFET을 한 개부터 풀어 보며 SPICE가 방정식을 푸는 방식, 모델의 의미, 실제 시뮬레이터와의 비교, 그리고 FinFET·GAA, DRAM 셀(워드라인·비트라인·저장 커패시터)까지. 총 11개 레슨.</p>
+<p>평면형(planar) MOSFET을 한 개부터 풀어 보며 SPICE가 방정식을 푸는 방식, 모델의 의미, 실제 시뮬레이터와의 비교, 그리고 FinFET·GAA, DRAM 셀(워드라인·비트라인·저장 커패시터)과 비트라인 하나를 공유하는 셀 2개·4개까지. 총 12개 레슨.</p>
 <p>생성: {today} · Python minispice · ngspice {ng}</p></header>
 <nav class="toc"><ul>{toc}</ul></nav>
 <main>{body}</main>

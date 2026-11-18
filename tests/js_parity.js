@@ -16,11 +16,17 @@ if (process.argv[3] === 'dram') {          // lesson 11 reference: node tests/js
     for (let k = 0; k < c.idx.length; k++) ws = Math.max(ws, Math.abs(r.bl[c.idx[k]] - c.bl[k]), Math.abs(r.sn[c.idx[k]] - c.sn[k]));
   }
   for (const c of ref.ret) {
-    const r = MS.dramRetention({ vdd: 1.2, vpp: 2.0, vth: c.vth, vwl: c.vwl, data1: c.data1, vbl: c.vbl, n: 1.3, cs: 25e-15, cbl: 150e-15, voff: 0.02, ij: 0.2e-15, wlr: 1 });
+    const r = MS.dramRetention({ vdd: 1.2, vpp: 2.0, vth: c.vth, vwl: c.vwl, data1: c.data1, vbl: c.vbl, duty: c.duty === undefined ? null : c.duty, n: 1.3, cs: 25e-15, cbl: c.cbl || 150e-15, voff: 0.02, ij: 0.2e-15, wlr: 1 });
     if (c.tret === null) { if (r.tret !== Infinity) mr = Infinity; }
     else { finite++; mr = Math.max(mr, Math.abs(r.tret - c.tret) / c.tret); }
     mr = Math.max(mr, Math.abs(r.vs[r.vs.length - 1] - c.v_end) / 1e3 + (r.ts.length === c.n ? 0 : 1));
   }
+  let wa = 0;
+  for (const c of ref.array) {
+    const r = MS.arraySim({ n: c.bits.length, bits: c.bits, sel: c.sel, vdd: 1.2, vpp: c.vpp, vth: 0.7, wlr: 1, cs: c.cs, cw: c.cw, cj: c.cj, voff: 0, gmsa: 2e-3, method: 'trap', dt: 10e-12 });
+    for (let k = 0; k < c.idx.length; k++) { wa = Math.max(wa, Math.abs(r.bl[c.idx[k]] - c.bl[k])); c.bits.forEach((b, j) => { wa = Math.max(wa, Math.abs(r.sn[j][c.idx[k]] - c.sn[j][k])); }); }
+  }
+  out.array = { cases: ref.array.length, max_abs_dv: wa };
   out.write = { cases: ref.write.length, max_abs_dv: ww }; out.share = { cases: ref.share.length, max_abs_dv: ws }; out.ret = { cases: ref.ret.length, finite_cases: finite, max_rel_dt: mr };
   console.log(JSON.stringify(out));
   process.exit(0);

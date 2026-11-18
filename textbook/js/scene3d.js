@@ -202,25 +202,36 @@
     }
   }
 
-  // ------------------------------------------------------------------ DRAM 1T1C cell (lesson 11)
-  /** st: planar state of the access transistor with s = storage-node side (left), d = bit-line side (right), plus {vdd, vbl, vsn, vwl}. */
-  function dram(sc, st) {
-    const Lg = 56, Lsd = 44, Wd = 70, H = 64, hBL = 50, xc = Lg + Lsd / 2;
-    planar(sc, Object.assign({}, st, { names: { s: '', d: '', g: '' } }), [0, 0, 0]);
+  // ------------------------------------------------------------------ DRAM 1T1C cell (lessons 11, 12)
+  /** st: planar state of the access transistor with s = storage-node side (left), d = bit-line side (right), plus {vdd, vbl, vsn, vwl, names?, noBar?}. off = [ox, oy, oz]. */
+  function dram(sc, st, off) {
+    off = off || [0, 0, 0]; const [ox, oy, oz] = off;
+    const Lg = 56, Lsd = 44, Wd = 70, H = 64, hBL = 50, xc = ox + Lg + Lsd / 2, nm = Object.assign({ s: 'SN', d: '', g: 'WL' }, st.names || {});
+    planar(sc, Object.assign({}, st, { names: { s: '', d: '', g: '' } }), off);
     const cG = vcol(st.vwl, st);
-    sc.box(-4, Lg + 4, -56, -4, 3.1, 28, cG, { layer: 3, alpha: 0.42 });                                                                  // the word line continues along y
-    sc.box(-4, Lg + 4, Wd + 4, Wd + 56, 3.1, 28, cG, { layer: 3, alpha: 0.42 });
-    sc.label([Lg / 2, -56, 30], `WL  ${st.vwl.toFixed(2)} V`, { dy: -4 });
-    sc.box(xc - 4, xc + 4, Wd / 2 - 4, Wd / 2 + 4, 0, hBL, vcol(st.vbl, st), { layer: 2 });                                                // bit-line contact
-    sc.box(xc - 4, xc + 118, Wd / 2 - 5, Wd / 2 + 5, hBL, hBL + 9, vcol(st.vbl, st), { layer: 3 });                                        // the bit line runs along x, perpendicular to the word line
-    sc.label([xc + 100, Wd / 2, hBL + 12], `BL  ${st.vbl.toFixed(2)} V`, { dy: -6 });
+    sc.box(ox - 4, ox + Lg + 4, oy - 56, oy - 4, oz + 3.1, oz + 28, cG, { layer: 3, alpha: 0.42 });                                       // the word line continues along y
+    sc.box(ox - 4, ox + Lg + 4, oy + Wd + 4, oy + Wd + 56, oz + 3.1, oz + 28, cG, { layer: 3, alpha: 0.42 });
+    if (nm.g) sc.label([ox + Lg / 2, oy - 56, oz + 30], `${nm.g}  ${st.vwl.toFixed(2)} V`, { dy: -4 });
+    sc.box(xc - 4, xc + 4, oy + Wd / 2 - 4, oy + Wd / 2 + 4, oz, oz + hBL, vcol(st.vbl, st), { layer: 2 });                                // bit-line contact
+    if (!st.noBar) {
+      sc.box(xc - 4, xc + 118, oy + Wd / 2 - 5, oy + Wd / 2 + 5, oz + hBL, oz + hBL + 9, vcol(st.vbl, st), { layer: 3 });                  // the bit line runs along x, perpendicular to the word line
+      sc.label([xc + 100, oy + Wd / 2, oz + hBL + 12], `BL  ${st.vbl.toFixed(2)} V`, { dy: -6 });
+    }
     const frac = clamp(st.vsn / (st.vdd || 1), 0, 1), cSN = vcol(st.vsn, st);                                                              // storage capacitor: the fill height = stored voltage
-    if (frac > 0.01) sc.box(-40, -8, 10, Wd - 10, 0.5, 0.5 + H * frac, cSN, { layer: 2 });
-    sc.box(-43, -5, 6, Wd - 6, 0.5, 0.5 + H, [176, 184, 198], { layer: 3, alpha: 0.2 });                                                   // plate electrode (glass-like shell)
-    sc.label([-24, Wd / 2, H + 4], `SN  ${st.vsn.toFixed(2)} V`, { dy: -6 });
-    sc.label([-24, Wd / 2, H * 0.45], 'Cs', { color: '#1f3b73', font: '700 12px system-ui' });
+    if (frac > 0.01) sc.box(ox - 40, ox - 8, oy + 10, oy + Wd - 10, oz + 0.5, oz + 0.5 + H * frac, cSN, { layer: 2 });
+    sc.box(ox - 43, ox - 5, oy + 6, oy + Wd - 6, oz + 0.5, oz + 0.5 + H, [176, 184, 198], { layer: 3, alpha: 0.2 });                       // plate electrode (glass-like shell)
+    if (nm.s) sc.label([ox - 24, oy + Wd / 2, oz + H + 4], `${nm.s}  ${st.vsn.toFixed(2)} V`, { dy: -6 });
     const fp = flowParams(st.I, 1);
-    if (fp.on) for (let i = 0; i < fp.per; i++) { const s = ((i + 0.17) / fp.per + (st.phase || 0) * fp.speed) % 1; sc.dot([xc, Wd / 2, hBL * (st.I > 0 ? 1 - s : s)], fp.r, dotFill(st.I)); }
+    if (fp.on) for (let i = 0; i < fp.per; i++) { const u = ((i + 0.17) / fp.per + (st.phase || 0) * fp.speed) % 1; sc.dot([xc, oy + Wd / 2, oz + hBL * (st.I > 0 ? 1 - u : u)], fp.r, dotFill(st.I)); }
+  }
+
+  /** n cells in a row along the shared bit line (lesson 12). st = {cells: [planar state + vsn + names], vbl, vdd, pitch}. */
+  function dramArray(sc, st) {
+    const pitch = st.pitch || 165, n = st.cells.length, Lg = 56, Lsd = 44, Wd = 70, hBL = 50;
+    st.cells.forEach((c, k) => dram(sc, Object.assign({ vdd: st.vdd, vbl: st.vbl, vmin: st.vmin, vmax: st.vmax, noBar: true, phase: st.phase }, c), [k * pitch, 0, 0]));
+    const x0 = Lg + Lsd / 2 - 4, x1 = (n - 1) * pitch + Lg + Lsd / 2 + 4 + 40, y = Wd / 2;
+    sc.box(x0, x1, y - 5, y + 5, hBL, hBL + 9, vcol(st.vbl, st), { layer: 3 });
+    sc.label([x1 - 30, y, hBL + 12], `BL  ${st.vbl.toFixed(2)} V`, { dy: -6 });
   }
 
   /** NMOS + PMOS pair (lesson 4): st.n and st.p are planar states */
@@ -233,5 +244,5 @@
     sc.label([dx + 30, Wd / 2, 36], 'PMOS (n-well)', { color: '#1f3b73', font: '700 12px system-ui', dy: -14 });
   }
 
-  G.Scene3D = { Scene, planar, finfet, gaa, cmos, dram, flowParams, mag };
+  G.Scene3D = { Scene, planar, finfet, gaa, cmos, dram, dramArray, flowParams, mag };
 })(typeof window !== 'undefined' ? window : globalThis);
