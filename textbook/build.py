@@ -17,7 +17,7 @@ sys.path.insert(0, str(HERE))
 import lessons  # noqa: E402
 
 SCRIPTS = ["lesson1_single_mosfet.py", "lesson2_newton.py", "lesson3_transient.py", "lesson4_inverter.py",
-           "lesson5_ekv.py", "lesson6_charge.py", "lesson7_ngspice.py", "lesson8_osdi.py"]
+           "lesson5_ekv.py", "lesson6_charge.py", "lesson7_ngspice.py", "lesson8_osdi.py", "lesson9_finfet.py", "lesson10_gaa.py"]
 
 
 def run_all():
@@ -90,10 +90,12 @@ def intro(passed, failed, ng):
         ["5", "EKV: subthreshold", "EKV", "swing·Vds 의존성: 이론 = 솔버", S["ok"]],
         ["6", "채널 전하 모델", "EKV + 전하", "교과서 값(½, ⅔, 0.4)·전하 보존. 외부 시뮬레이터와는 비교하지 않음", S["part"]],
         ["7", "ngspice 교차검증", "Level 1", f"ngspice {ng}와 같은 netlist 비교", S["ok"]],
-        ["8", "Verilog-A / OSDI", "EKV (VA)", "<b>실행하지 못함</b>. 절차와 소스만 수록", S["no"]]]
+        ["8", "Verilog-A / OSDI", "EKV (VA)", "<b>실행하지 못함</b>. 절차와 소스만 수록", S["no"]],
+        ["9", "FinFET", "EKV + DIBL", "구조·기하는 계산, 설계 경험칙은 강의자료. <b>n, η, fin 폭은 가상의 예시값</b>", S["part"]],
+        ["10", "GAA / 나노시트", "EKV + DIBL", "기하 유도와 방향성 계산. <b>나노시트 치수, n, η는 가상의 예시값</b>", S["part"]]]
     s = f"""
 <section id="intro" class="plain"><h2><span class="num">0</span>시작하기</h2>
-<p>이 교재는 <b>SPICE를 처음 접하는 사람</b>이 평면형(planar) MOSFET의 compact model을 직접 계산해 보면서 SPICE가 회로를 푸는 방식을 이해하도록 만들었습니다. 직접 만든 작은 SPICE(<code>minispice</code>, Python)를 쓰고, 마지막에는 실제 시뮬레이터(ngspice)와 비교합니다.</p>
+<p>이 교재는 <b>SPICE를 처음 접하는 사람</b>이 평면형(planar) MOSFET의 compact model을 직접 계산해 보면서 SPICE가 회로를 푸는 방식을 이해하도록 만들었고, 마지막에는 FinFET과 GAA(나노시트)로 확장합니다. 직접 만든 작은 SPICE(<code>minispice</code>, Python)를 쓰고, 마지막에는 실제 시뮬레이터(ngspice)와 비교합니다.</p>
 <p>모든 레슨은 같은 순서입니다: <b>회로도 → 손 계산 → 코드·시뮬레이션 → 그래프 → 요약</b>. 본문의 숫자는 이 페이지를 만들 때 코드를 실제로 실행해서 넣은 값입니다.</p>
 <h3>전체 지도와 검증 상태</h3>
 {lessons.tbl(["레슨", "주제", "모델", "무엇과 비교했나", "상태"], rows)}
@@ -124,13 +126,16 @@ def appendix(passed, failed):
 <li><b>EKV</b>: 장채널 단순형. 몸체 효과의 전압 의존성, 이동도 저하, 속도 포화, DIBL 없음.</li>
 <li><b>전하 모델</b>: 공핍·축적(벌크) 전하 없음, 용량 행렬은 수치 미분. n &gt; 1에서 Cgb &lt; 0.</li>
 <li><b>솔버</b>: 조밀(dense) 행렬이라 수백 노드까지. gmin = 10⁻¹² S 고정. 초기조건(.ic, UIC) 미지원이라 링 오실레이터는 전류 펄스로 기동. 수렴 보조는 전압 스텝 제한, gmin/source stepping, 시간 스텝 분할만 있음.</li>
-<li><b>ngspice 비교</b>는 Level 1만. EKV·전하 모델의 외부 대조는 아직 없음(레슨 8).</li></ul>
+<li><b>ngspice 비교</b>는 Level 1만. EKV·전하 모델의 외부 대조는 아직 없음(레슨 8).</li>
+<li><b>FinFET·GAA(레슨 9, 10)</b>: 모델은 평면형과 같은 EKV에 DIBL 계수를 더한 것이고, n·η·fin/시트 치수는 가상의 예시값입니다. 3차원 정전기, 양자 효과, 기생 소자는 없고, 자연 길이 이론(L 의존성)은 공식을 확인하지 못해 다루지 않았습니다.</li></ul>
 <h3>B. 개발 중 발견하고 고친 문제</h3>
 <ol>
 <li><b>펄스 에지와 trapezoidal</b>: 에지가 시간 스텝 중간에 있으면 첫 스텝 결과가 정확히 절반이 되었습니다 → 소스 꺾임점에 시간 점을 맞추도록 수정(레슨 3).</li>
 <li><b>레슨 2의 반복 로그 설명</b>: 예상으로 쓴 설명이 실제 솔버 로그와 달랐습니다 → 로그를 훅(<code>trace</code>)으로 직접 찍어 설명을 다시 썼습니다.</li>
 <li><b>EKV 비교 조건</b>: Vds = 1.0 V에서 비교하니 포화가 아니라서 EKV/Level 1 비율이 1/n과 어긋났습니다 → 모든 비교를 Vds = 1.8 V(포화)로 통일(레슨 5).</li>
-<li><b>전하 모델의 단자 순서 오류와 무의미한 테스트</b>: 링이 오히려 빨라지는 결과로 발견했고, 용량 테스트가 허용오차 때문에 항상 통과하고 있었습니다 → 수정하고 테스트를 무차원으로 다시 작성(레슨 6).</li></ol>
+<li><b>전하 모델의 단자 순서 오류와 무의미한 테스트</b>: 링이 오히려 빨라지는 결과로 발견했고, 용량 테스트가 허용오차 때문에 항상 통과하고 있었습니다 → 수정하고 테스트를 무차원으로 다시 작성(레슨 6).</li>
+<li><b>자연 길이 공식</b>: 레슨 9·10을 위해 원문(Berkeley 슬라이드, IEEE 논문, Nature 리뷰)을 읽으려 했지만 공식을 정확히 얻지 못했습니다(링크 404, 로그인 필요, 슬라이드 글자 깨짐) → 기억에 의존해 쓰지 않고, 원문에서 확인된 설계 경험칙만 사용했습니다.</li>
+<li><b>DIBL 테스트의 가정</b>: 문턱 근처 Vgs에서 “약반전 근사”로 검사했다가 실패했습니다 → 근사가 성립하는 깊은 약반전으로 옮기고, 정확한 등가성(<code>Id(vgs, vds) = Id(vgs + η·vds, vds)</code>) 검사를 따로 두었습니다.</li></ol>
 <h3>C. 코드 지도</h3>
 {lessons.tbl(["경로", "내용"], [
     ["<code>minispice/models.py</code>", "Level1, EKV(전류 + 전하). 공통 인터페이스 <code>evaluate()</code>, <code>charges()</code>"],
@@ -139,6 +144,7 @@ def appendix(passed, failed):
     ["<code>minispice/netlist.py</code>", "SPICE 문법 파서 (R C V I M, .model .op .dc .tran, PULSE)"],
     ["<code>examples/lessonN_*.py</code>", "레슨별 스크립트(수치 출력 + 그림)"],
     ["<code>examples/va/ekv_simple.va</code>", "레슨 8의 Verilog-A (미컴파일)"],
+    ["<code>examples/draw_multigate.py</code>", "FinFET·GAA의 3차원 구조도와 단면도"],
     ["<code>tests/</code>", f"테스트 {passed}개"],
     ["<code>textbook/</code>", "이 교재의 생성 코드 (<code>build.py</code>)"]])}
 </section>"""
@@ -150,18 +156,18 @@ def main():
     passed, failed = run_tests()
     ng = lessons.J(7)["ngspice_version"]
     nav = [("intro", "시작하기")] + [(f"l{n}", f"{n}. {t}") for n, t in
-           ((1, "NMOS 하나"), (2, "Newton"), (3, "Transient"), (4, "CMOS 인버터"), (5, "EKV"), (6, "전하 모델"), (7, "ngspice"), (8, "OSDI"))] + [("resources", "추천 자료"), ("appendix", "부록")]
+           ((1, "NMOS 하나"), (2, "Newton"), (3, "Transient"), (4, "CMOS 인버터"), (5, "EKV"), (6, "전하 모델"), (7, "ngspice"), (8, "OSDI"), (9, "FinFET"), (10, "GAA"))] + [("resources", "추천 자료"), ("appendix", "부록")]
     toc = "".join(f'<li><a href="#{a}">{t}</a></li>' for a, t in nav)
     body = intro(passed, failed, ng) + "".join(f() for f in (lessons.lesson1, lessons.lesson2, lessons.lesson3, lessons.lesson4,
-                                                             lessons.lesson5, lessons.lesson6, lessons.lesson7, lessons.lesson8)) + lessons.resources() + appendix(passed, failed)
+                                                             lessons.lesson5, lessons.lesson6, lessons.lesson7, lessons.lesson8, lessons.lesson9, lessons.lesson10)) + lessons.resources() + appendix(passed, failed)
     today = datetime.date.today().isoformat()
     page = f"""<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SPICE로 배우는 MOSFET Compact Model</title>
-<meta name="description" content="평면형 MOSFET compact model을 직접 계산하며 SPICE가 회로를 푸는 방식을 배우는 8개 레슨">
+<meta name="description" content="평면형 MOSFET compact model을 직접 계산하며 SPICE가 회로를 푸는 방식을 배우고 FinFET·GAA로 확장하는 10개 레슨">
 <style>{CSS}</style></head><body>
 <header class="hero"><h1>SPICE로 배우는 MOSFET Compact Model</h1>
-<p>평면형(planar) MOSFET을 한 개부터 풀어 보며 SPICE가 방정식을 푸는 방식, 모델의 의미, 그리고 실제 시뮬레이터와의 비교까지. 총 8개 레슨.</p>
+<p>평면형(planar) MOSFET을 한 개부터 풀어 보며 SPICE가 방정식을 푸는 방식, 모델의 의미, 실제 시뮬레이터와의 비교, 그리고 FinFET과 GAA까지. 총 10개 레슨.</p>
 <p>생성: {today} · Python minispice · ngspice {ng}</p></header>
 <nav class="toc"><ul>{toc}</ul></nav>
 <main>{body}</main>

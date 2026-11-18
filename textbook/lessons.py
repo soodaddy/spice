@@ -477,3 +477,129 @@ def resources():
                     "<li>목록 작성일: 2026-11-19. 자료의 가용성은 시간이 지나면 달라집니다.</li></ul>")
     s += "</section>"
     return s
+
+
+# ---------------------------------------------------------------- lessons 9 and 10: FinFET and GAA
+def _srcs(items):
+    return "<ul class=\"src\">" + "".join(f"<li>{_a(u, t)}</li>" for u, t in items) + "</ul>"
+
+
+SRC_BSIM = [("https://bsim.gitbooks.io/bsimcmg/content/Ch5.1.1.html", "BSIM-CMG 매뉴얼 5.1.1 (GEOMOD 파라미터)"),
+            ("https://bsim.gitbooks.io/bsimcmg/content/Ch3.1.2.html", "BSIM-CMG 매뉴얼 3.1.2 (유효 폭, 채널 길이, fin 수)")]
+SRC_LEC = ("https://people.eecs.berkeley.edu/~tking/presentations/KingLiu_SOI2012.pdf", "Berkeley 강의자료 (T.-J. K. Liu, SOI 2012): 슬라이드 7, 26")
+SRC_WEFF = [("https://semiwiki.com/?p=1180", "SemiWiki: FinFET 폭 증분에 대한 설명"),
+            ("https://sites.ji.sjtu.edu.cn/xinfei-guo/wp-content/uploads/sites/27/2021/05/pdf.pdf", "강의 자료: 폭 n(2H + t)")]
+
+CHIP = {"fact": '<span class="st ok">확인된 사실</span>', "calc": '<span class="st part">코드로 계산</span>', "illus": '<span class="st no">교육용 예시값</span>'}
+
+
+def lesson9():
+    k = J(9)
+    g, m = k["geom"], k["model"]
+    S = m["sets"]
+    import math as _m
+    from minispice.models import VT as _VT
+    beta = 300e-6 * (1e-6 / 20e-9)
+
+    def ioff_hand(n, eta):
+        return 2 * n * beta * _VT**2 * _m.exp((eta * m["vdd"] - m["vto"]) / (n * _VT)) * (1 + 0.05 * m["vdd"])
+    rows = [[r["n"], f"{r['weff']:.0f} nm", f"{r['planar']:.0f} nm"] for r in g["rows"]]
+    # Ioff: hand formula vs simulation, and the size of the F(x) ~ e^x correction that explains the gap
+    ioff_err = {nm: v["ioff"] / ioff_hand(v["n"], v["eta"]) - 1 for nm, v in S.items()}
+    ioff_corr = {nm: -_m.exp((v["eta"] * m["vdd"] - m["vto"]) / (v["n"] * _VT) / 2) for nm, v in S.items()}
+    ss_err_max = max(abs(v["ss_sim"] / v["ss_hand"] - 1) for v in S.values())
+    rl = k["rules"]
+    rrows = [[f"{L:g} nm", f"{u:g} nm", f"{f:g} nm"] for L, u, f in zip(rl["L"], rl["utb"], rl["fin"])]
+    mrows = [[nm, f"{v['n']}", f"{v['eta']}", f"{v['ss_hand']:.1f}", f"{v['ss_sim']:.1f}", f"{v['dibl_hand']:.0f}", f"{v['dibl_sim']:.1f}",
+              f"{ioff_hand(v['n'], v['eta']):.2e}", f"{v['ioff']:.2e}"] for nm, v in S.items()]
+    s = head(9, "FinFET: 구조에서 compact model 파라미터까지", "게이트가 채널의 여러 면을 감싸면 왜 좋은지 이해하고, FinFET의 구조(fin 높이·폭·개수)가 compact model의 파라미터(유효 폭 W, 기울기 계수 n, DIBL 계수 η)로 어떻게 바뀌는지 계산해 본다.")
+    s += f"""
+{box("warn", "이 레슨의 성격: 무엇이 사실이고 무엇이 예시인가", f'''<p>이 레슨의 값은 세 종류이고, 본문에서 아래 표시로 구분합니다.</p>
+<ul><li>{CHIP["fact"]} 웹 검색으로 출처를 확인한 내용(유효 폭 공식, Intel 22 nm의 fin 피치·높이, Berkeley 강의의 설계 경험칙, BSIM-CMG의 구조 구분).</li>
+<li>{CHIP["calc"]} minispice로 계산한 값. 손 계산과 시뮬레이션을 비교합니다.</li>
+<li>{CHIP["illus"]} <b>제가 정한 가상의 값</b>(fin 폭 8 nm, 모델 파라미터 n·η). 어떤 공정에서 추출한 값이 아니므로 <b>크기가 아니라 방향(순서)과 원리</b>를 보는 데 쓰세요.</li></ul>
+<p>또 이 교재의 모델은 BSIM-CMG가 아니며(레슨 8은 아직 실행되지 않았습니다), <b>정전기적 자연 길이(natural length)의 정확한 공식은 원문으로 확인하지 못해서 쓰지 않았습니다.</b></p>''')}
+
+<h3>9.1 왜 FinFET인가</h3>
+<p>평면형은 게이트가 채널 <b>위쪽 한 면</b>만 덮습니다. 게이트 길이 L이 짧아지면 드레인 전압이 채널 아래쪽 장벽을 낮추는 것(<b>DIBL</b>)을 게이트가 막지 못하고, 문턱 아래 기울기도 나빠져서 꺼진 상태의 누설이 커집니다. 해법은 <b>게이트와 채널의 용량성 결합을 키우는 것</b>, 즉 채널을 얇게 세우고 게이트가 여러 면을 감싸게 하는 것입니다. Berkeley 강의자료도 “게이트와 채널의 결합이 클수록 채널 전위를 더 잘 제어하고, DIBL이 줄어든다”고 설명합니다. {CHIP["fact"]}</p>
+{fig("lesson9", "그림 9-1. (a) FinFET 3차원 구조, (b) 채널에 수직인 단면(점선 = 게이트가 닿는 면), (c) 시험 회로와 netlist, (d) fin 수에 따른 유효 폭, (e) DIBL 100 mV/V에 필요한 몸체 크기, (f) 모델의 Id–Vgs (예시 파라미터)")}
+
+<h3>9.2 구조 읽기</h3>
+<ul><li><b>fin</b>: 기판 위에 세운 얇은 실리콘 벽입니다. 높이 H, 폭 W. 한 트랜지스터는 fin을 n개 나란히 둘 수 있습니다.</li>
+<li><b>게이트</b>가 fin을 위와 양옆 <b>3면</b>에서 감쌉니다(그림 (b)의 점선). 평면형은 윗면 하나입니다.</li>
+<li>소스와 드레인은 fin의 양 끝입니다(그림 (a)의 주황색). 전류는 fin 안을 소스에서 드레인으로 흐릅니다.</li></ul>
+
+<h3>9.3 손 계산 ① 유효 채널 폭 {CHIP["fact"]}{CHIP["calc"]}</h3>
+<p>전류가 흐르는 폭은 게이트가 닿는 면의 길이입니다. fin 하나당 양옆 2H와 윗면 W를 더한 값이고, fin이 n개면 n배입니다.</p>
+{eq("W_eff = n · (2·H + W_fin)")}
+<p>H = {g["h"]:.0f} nm, fin 피치 = {g["pitch"]:.0f} nm는 Intel 22 nm 세대 값으로 2차 자료에서 확인했고(1차 출처로 재확인 필요), <b>fin 폭 W_fin = {g["wfin"]:.0f} nm는 제가 가정한 값</b>입니다{CHIP["illus"]}. 그러면 fin 하나당 2·{g["h"]:.0f} + {g["wfin"]:.0f} = <b>{g["weff_fin"]:.0f} nm</b>이고, 같은 레이아웃 폭(피치 {g["pitch"]:.0f} nm)에 놓인 평면형의 폭 {g["pitch"]:.0f} nm보다 <b>×{g["ratio_vs_planar"]:.2f}</b> 큽니다.</p>
+{tbl(["fin 수 n", "FinFET의 W_eff", "같은 풋프린트의 평면형 W"], rows)}
+<p><b>폭 양자화</b>: 폭은 fin 개수 단위로만 바뀝니다(그림 (d)의 계단). 그래서 NMOS와 PMOS의 구동 세기 비율도 fin 개수의 비로 맞춰야 합니다. 참고로 실제로는 fin을 2개 단위로 늘리는 경우도 있다고 하며, 위의 단순한 식이 무시하는 효과도 있습니다(SemiWiki 글). 이 교재의 식은 가장 단순한 형태입니다.</p>
+
+<h3>9.4 몸체 크기와 게이트 길이: 설계 경험칙 {CHIP["fact"]}</h3>
+<p>Berkeley 강의자료(슬라이드 26, Yang·Fossum 논문 인용)는 <b>DIBL = 100 mV/V를 얻기 위해 필요한 몸체 크기</b>를 게이트 길이 L에 대한 비율로 정리합니다(Tox = 1.1 nm).</p>
+{tbl(["구조", "필요한 몸체 크기"], [["초박막 평면형(UTB)", "t_Si ≈ L/5"], ["FinFET (좁은 fin)", "W_Si ≈ L/2"], ["트라이게이트(완화)", "W_Si &gt; L/2, H_Si &gt; L/5"]])}
+{tbl(["L", "UTB 평면형 t_Si", "FinFET W_fin"], rrows)}
+<p>같은 DIBL을 얻는 데 FinFET은 평면 초박막보다 <b>2.5배 두꺼운 몸체</b>를 허용합니다(L/2 대 L/5). 제조하기 훨씬 쉽다는 뜻입니다. 반대로 L이 10 nm이면 fin 폭이 5 nm 수준이어야 해서 FinFET도 결국 한계에 다가갑니다(레슨 10).</p>
+
+<h3>9.5 compact model로 번역하기 {CHIP["calc"]}{CHIP["illus"]}</h3>
+<p>구조의 장점은 compact model에서 두 파라미터로 나타납니다.</p>
+{tbl(["물리", "파라미터", "식"], [
+    ["게이트가 채널을 잘 제어한다 → 문턱 아래 기울기가 가파르다", "기울기 계수 <b>n</b> (이상값 1)", "SS = n·Vt·ln 10"],
+    ["드레인 전압이 장벽을 덜 낮춘다", "DIBL 계수 <b>η</b> [V/V]", "Vth,eff = Vth − η·Vds"],
+    ["채널 폭", "W", "W = n_fin·(2H + W_fin)"]])}
+<p>minispice의 EKV에 DIBL을 넣었습니다. 게이트 전압을 <code>Vgs + η·Vds</code>로 바꾸는 것이 전부이고, 연쇄 법칙에 따라 <code>gds</code>에 <code>η·gm</code>이 더해집니다. (이 변경은 도함수 유한차분 검사와 “DIBL이 문턱을 η·Vds만큼 옮긴다” 검사를 통과합니다.)</p>
+<p>아래 파라미터는 <b>가상의 예시값</b>입니다(L = 20 nm, Vdd = 0.8 V, VTO = {m["vto"]} V, W/L = 50). 게이트가 감싸는 면이 늘수록 n과 η가 작아지는 <b>방향</b>을 보여 줍니다.</p>
+{tbl(["구조", "n", "η", "SS 손 [mV/dec]", "SS 시뮬", "DIBL 손 [mV/V]", "DIBL 시뮬", "Ioff 손 [A]", "Ioff 시뮬 [A]"], mrows)}
+<ul>
+<li><b>SS</b> 손 계산은 n·Vt·ln10이고, Vgs = 0~0.1 V(깊은 약반전)에서 측정한 시뮬레이션과 최대 {ss_err_max*100:.1f}% 차이입니다.</li>
+<li><b>DIBL</b> 시뮬레이션은 같은 전류가 되는 Vgs를 Vds = 0.1 V와 0.8 V에서 비교해 추출했습니다. 설정값 η보다 3~4 mV/V 큰 것은 낮은 Vds에서 <code>(1 − e^(−Vds/Vt))</code>가 1이 아니고(0.98), 채널 길이 변조 항도 있기 때문입니다.</li>
+<li><b>Ioff</b> 손 계산은 <code>Is·exp((η·Vds − VTO)/(n·Vt))·(1+λVds)</code>입니다. 시뮬레이션이 평면형은 {-ioff_err['planar']*100:.2f}%, FinFET은 {-ioff_err['FinFET']*100:.2f}% 작은데, 이는 레슨 5에서 본 <code>F(x) ≈ e^x</code> 근사의 보정 −e^(x/2)가 예측하는 {-ioff_corr['planar']*100:.2f}%, {-ioff_corr['FinFET']*100:.2f}%와 거의 같습니다.</li>
+<li>결과적으로 같은 VTO에서 <b>꺼진 전류가 평면형이 FinFET의 약 {m["ioff_ratio"]:.0f}배</b>입니다(그림 (f)). n과 η가 모두 기여합니다. 켜진 전류는 거의 비슷합니다.</li></ul>
+
+<h3>9.6 실제 compact model은 어떻게 다루나 {CHIP["fact"]}</h3>
+<p>산업 표준으로 알려진 <b>BSIM-CMG</b>는 공통 다중 게이트 모델이고, <code>GEOMOD</code> 파라미터로 구조를 고릅니다: <b>0 = 이중 게이트, 1 = 트라이게이트, 2 = 사중 게이트, 3 = 원통형</b>. fin 폭과 높이, 채널 길이, fin 수를 입력으로 받습니다. 이 교재의 모델에는 없는 것도 많습니다: 3차원 정전기 효과, 양자 구속, 이동도의 전계 의존성, 기생 저항·용량 등입니다. 이런 모델을 ngspice에서 쓰려면 레슨 8의 경로(Verilog-A → OSDI)가 필요합니다.</p>
+{box("warn", "이 레슨의 한계", "<ul><li>n, η, fin 폭은 예시이고 어떤 공정과도 맞춘 값이 아닙니다. 절대 수치(예: ×40배)를 실제 소자의 값으로 읽으면 안 됩니다.</li><li>L에 따른 DIBL·SS의 변화를 모델링하려면 자연 길이 이론이 필요한데, 정확한 식을 확인하지 못해서 다루지 않았습니다.</li><li>레슨 6의 전하 모델은 이 레슨에서 쓰지 않았고, FinFET 고유의 게이트-소스/드레인 기생 용량도 없습니다.</li></ul>")}
+{box("ok", "요약", "<ul><li>FinFET은 게이트가 fin을 3면에서 감싸 채널 제어를 높인다. 유효 폭은 n·(2H + W_fin)이고 fin 개수 단위로만 바뀐다.</li><li>같은 DIBL에서 FinFET은 평면 초박막보다 몸체를 약 2.5배 두껍게 만들 수 있다(경험칙).</li><li>compact model에서는 n(문턱 아래 기울기)과 η(DIBL)가 작아지고 W가 n_fin·W_eff가 된다.</li></ul>")}
+<h3>출처</h3>
+{_srcs([SRC_LEC] + SRC_BSIM + SRC_WEFF)}
+<p class="run">직접 해 보기: <code>python examples/lesson9_finfet.py</code></p></section>"""
+    return s
+
+
+def lesson10():
+    k = J(10)
+    g, S = k["geom"], k["sets"]
+    gain = k["ion_gain_vs_planar"]
+    rows = [[nm, f"{v['n']}", f"{v['eta']}", f"{v['ss_hand']:.1f} / {v['ss_sim']:.1f}", f"{v['dibl_hand']:.0f} / {v['dibl_sim']:.1f}",
+             f"{v['vto_at_target']:.3f} V", f"{v['ion_at_target']*1e3:.2f} mA (×{gain[nm]:.2f})", f"{v['gain_hand']:.1f} / {v['gain_num']:.1f}"] for nm, v in S.items()]
+    s = head(10, "GAA와 나노시트: 게이트가 채널을 완전히 감싼다", "FinFET의 한계가 왜 생기는지, 게이트가 4면을 감싸는 GAA(nanosheet)가 어떻게 이를 푸는지 이해하고, 게이트 제어가 좋아지면 회로 특성(Ion–Ioff, 이득)이 어떻게 달라지는지 계산해 본다.")
+    s += f"""
+{box("warn", "이 레슨의 성격", f'''<p>레슨 9와 같습니다. {CHIP["fact"]}(BSIM-CMG의 구조 구분, 원통형 유효 폭 π·D, 업계 동향), {CHIP["calc"]}(minispice 계산), {CHIP["illus"]}(나노시트 치수와 모델 파라미터 n, η)를 구분해서 표시합니다. 파라미터는 가상의 값이라 <b>순서와 원리</b>를 보는 용도입니다.</p>''')}
+<h3>10.1 FinFET의 다음 단계</h3>
+<p>레슨 9의 경험칙에 따르면 FinFET은 W_fin ≈ L/2가 필요합니다. L이 10 nm이면 fin 폭이 5 nm여야 하고, fin을 이렇게 얇고 높게 세우는 것은 점점 어렵습니다. 게이트가 3면이 아니라 <b>4면(전방위)</b>을 감싸면 같은 몸체 두께에서 채널 제어가 더 좋아집니다. 이것이 <b>GAA(gate-all-around)</b>이고, 실리콘을 얇은 판(<b>나노시트</b>) 여러 장으로 수평 적층하거나 가는 원통(나노와이어)으로 만듭니다.</p>
+<p>업계 동향은 2차 자료로만 확인했습니다. 삼성이 2022년에 “3 nm” GAA 공정의 초기 생산을 시작했다고 보도되었고, TSMC의 N2도 나노시트를 쓰는 것으로 알려져 있습니다. 시기는 자료마다 다르고 현재의 양산 상태는 확인하지 못했으니 1차 출처로 확인하세요.</p>
+{fig("lesson10", "그림 10-1. (a) 나노시트 GAA 3차원 구조, (b) FinFET과 나노시트의 단면 비교, (c) 유효 폭: fin은 계단식, 나노시트는 연속, (d) Ion–Ioff 곡선, (e) 인버터 VTC, (f) 게이트가 감싸는 면과 n, η")}
+
+<h3>10.2 손 계산 ① 나노시트의 유효 폭 {CHIP["calc"]}{CHIP["illus"]}</h3>
+<p>게이트가 직사각형 시트를 완전히 감싸면 시트의 <b>둘레 전체</b>가 채널이 됩니다. 폭 W, 두께 T인 시트 한 장의 유효 폭은 2(W + T)이고, N장이면 N배입니다. (이 식은 기하학에서 유도한 것이고 특정 문헌에서 인용한 공식이 아닙니다.)</p>
+{eq("W_eff = N · 2 · (W + T)")}
+<p>가상의 치수 W = {g["w"]:.0f} nm, T = {g["t"]:.0f} nm, N = {g["n"]}이면 시트 하나당 2·({g["w"]:.0f} + {g["t"]:.0f}) = <b>{g["per_sheet"]:.0f} nm</b>, 전체 <b>{g["weff_ns"]:.0f} nm</b>입니다. 윗면에만 게이트가 있다면 {g["top_only"]:.0f} nm뿐이므로, <b>감싸는 면이 폭을 만듭니다.</b> 원통형 나노와이어는 둘레 π·D이고(BSIM-CMG 매뉴얼에서 확인 {CHIP["fact"]}), 지름 6 nm이면 {g["cyl_weff"]:.1f} nm입니다. FinFET의 fin 하나({g["weff_fin"]:.0f} nm)와 비교하면 그림 (c)처럼 FinFET은 계단이고 나노시트는 시트 폭 W를 바꿔서 폭을 <b>연속적으로</b> 조절할 수 있습니다.</p>
+
+<h3>10.3 손 계산 ② 게이트 제어가 회로에 주는 효과 {CHIP["calc"]}{CHIP["illus"]}</h3>
+<p>레슨 9의 방식으로 세 구조의 파라미터를 가정했습니다(L = 20 nm, Vdd = 0.8 V, W/L = 50). 게이트가 감싸는 면이 1 → 3 → 4면으로 늘수록 n과 η가 작아집니다.</p>
+{tbl(["구조", "n", "η", "SS 손/시뮬 [mV/dec]", "DIBL 손/시뮬 [mV/V]", "Ioff = 1 nA에 필요한 VTO", "그 때의 Ion", "인버터 이득 손/수치"], rows)}
+<ul>
+<li><b>같은 Ioff에서의 Ion</b>: 꺼진 전류가 같도록 문턱전압을 맞추면, n과 η가 작은 구조는 문턱전압을 더 낮출 수 있어서(VTO가 {S['planar']['vto_at_target']:.3f} → {S['FinFET']['vto_at_target']:.3f} → {S['GAA']['vto_at_target']:.3f} V) 켜진 전류가 커집니다. 여기에 EKV의 강반전 전류가 1/n에 비례하는 효과(레슨 5)도 더해집니다. 이 크기(×{gain["FinFET"]:.2f}, ×{gain["GAA"]:.2f})는 <b>가정한 n, η의 결과이므로 방향으로만 읽어야 합니다.</b></li>
+<li><b>인버터 이득</b>: DIBL은 포화 영역의 출력 컨덕턴스를 키웁니다(<code>gds = λ·I + η·gm</code>). 그래서 gm/gds는 대략 1/η를 넘을 수 없습니다(η = 0.10, 0.04, 0.02이면 상한 10, 25, 50). 이득은 (gmn + gmp)/(gdsn + gdsp)로 손 계산한 값과 VTC의 최대 기울기가 같습니다(표의 마지막 열). η = 0.10이면 이득이 약 10, η = 0.02이면 약 44입니다. 그림 (e)의 VTC가 점점 가팔라지는 이유입니다.</li></ul>
+
+<h3>10.4 BSIM-CMG에서의 구분 {CHIP["fact"]}</h3>
+{tbl(["GEOMOD", "의미 (매뉴얼에서 확인)", "게이트가 감싸는 면 (일반 지식)"], [
+    ["0", "이중 게이트", "양옆 2면"], ["1", "트라이게이트", "3면"], ["2", "사중 게이트", "4면 (정사각형 단면 GAA)"], ["3", "원통형 게이트", "전방위 (나노와이어)"]])}
+<p>FinFET은 보통 이중/트라이게이트, GAA는 사중/원통형에 해당한다고 이해하면 되지만, 이것은 개념적 대응이고 <b>구조별 권장 설정을 매뉴얼에서 확인하지는 않았습니다.</b> GEOMOD 0~3의 의미와 원통형 유효 폭은 BSIM-CMG 매뉴얼에서 확인했습니다. 나노시트를 이 중 어느 설정으로 다루는지는 확인하지 못했습니다(나노시트를 위한 통합 모델 논문이 별도로 있다고만 확인). 실제로 쓰려면 매뉴얼을 직접 보세요.</p>
+{box("warn", "이 레슨의 한계", "<ul><li>나노시트 치수와 n, η는 모두 가상의 값입니다. “GAA가 평면형의 2배 이상”처럼 읽으면 안 됩니다.</li><li>이 모델에 없는 것: 시트 사이 결합, 양자 구속, 자기 발열, 기생 저항·용량, 변동성 등.</li><li>L 의존성(자연 길이 이론)은 정확한 공식을 확인하지 못해 다루지 않았습니다.</li></ul>")}
+{box("ok", "요약", "<ul><li>GAA는 게이트가 채널을 4면(전방위)에서 감싸 FinFET보다 짧은 L에서도 채널 제어를 유지한다.</li><li>나노시트의 유효 폭은 N·2(W + T)(기하 유도)이고 시트 폭으로 연속 조절된다. fin은 개수 단위로만 바뀐다.</li><li>게이트 제어가 좋으면(n, η 작음) 같은 누설에서 더 큰 Ion, 더 높은 이득을 얻는다(방향).</li></ul>")}
+<h3>출처</h3>
+{_srcs([SRC_LEC] + SRC_BSIM)}
+<p class="run">직접 해 보기: <code>python examples/lesson10_gaa.py</code></p></section>"""
+    return s

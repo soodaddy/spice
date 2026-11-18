@@ -2,11 +2,11 @@
 spice study
 
 SPICE가 MOSFET compact model을 푸는 방식을 **직접 만들어 보며** 배우는 학습 프로젝트입니다.
-평면형(planar) MOSFET 한 개부터 시작해서 CMOS 인버터, EKV 모델, 채널 전하 모델, ngspice 교차검증까지 8개 레슨으로 구성했습니다.
+평면형(planar) MOSFET 한 개부터 시작해서 CMOS 인버터, EKV 모델, 채널 전하 모델, ngspice 교차검증, 그리고 FinFET과 GAA(나노시트)까지 10개 레슨으로 구성했습니다.
 
 ## 교재
 
-**[`docs/index.html`](docs/index.html)** — 8개 레슨 교재 (그림이 포함된 단일 HTML 파일). 저장소를 받은 뒤 브라우저로 열면 됩니다.
+**[`docs/index.html`](docs/index.html)** — 10개 레슨 교재 (그림이 포함된 단일 HTML 파일). 저장소를 받은 뒤 브라우저로 열면 됩니다.
 (GitHub Pages로 공개하려면 저장소 Settings → Pages에서 `main` 브랜치의 `/docs` 폴더를 지정하면 됩니다. 현재는 설정하지 않았습니다.)
 
 | 레슨 | 내용 | 상태 |
@@ -19,6 +19,8 @@ SPICE가 MOSFET compact model을 푸는 방식을 **직접 만들어 보며** �
 | 6 | 채널 전하 모델 (MOSFET 내부 용량) | 부분 검증 (외부 시뮬레이터와는 비교하지 않음) |
 | 7 | ngspice 교차검증 (Level 1) | 실행·검증됨 |
 | 8 | Verilog-A / OSDI | **미실행**: 절차와 소스만 수록, `examples/va/ekv_simple.va`는 컴파일해 보지 않음 |
+| 9 | FinFET | 부분 검증: 구조·기하는 계산, 설계 경험칙은 강의자료. **n, η, fin 폭은 가상의 예시값** |
+| 10 | GAA / 나노시트 | 부분 검증: 기하 유도와 방향성 계산. **나노시트 치수, n, η는 가상의 예시값** |
 
 ## 구성
 

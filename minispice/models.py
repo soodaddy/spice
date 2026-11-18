@@ -156,8 +156,9 @@ class EKV(MosModel):
     All voltages are bulk-referenced, so source/drain are inherently symmetric.
     """
 
-    defaults = dict(vto=0.5, kp=2e-4, n=1.3, lambda_=0.0,
+    defaults = dict(vto=0.5, kp=2e-4, n=1.3, lambda_=0.0, eta=0.0,
                     cgso=0.0, cgdo=0.0, cgbo=0.0, cox=0.0)  # cox: gate capacitance per area [F/m^2]
+    # eta: DIBL coefficient [V/V]. The threshold drops by eta*Vds, i.e. the gate "sees" Vgs + eta*Vds.
 
     def __init__(self, polarity, params=None):
         params = dict(params or {})
@@ -169,7 +170,8 @@ class EKV(MosModel):
         p = self.p
         n, lam = p["n"], p["lambda_"]
         is_ = 2 * n * p["kp"] * (w / l) * VT * VT
-        vp = (vgs - vbs - self.vto) / n
+        eta = self.p["eta"]
+        vp = (vgs + eta * vds - vbs - self.vto) / n
         vsb, vdb = -vbs, vds - vbs
         f_f, df_f = _ekv_f((vp - vsb) / VT)
         f_r, df_r = _ekv_f((vp - vdb) / VT)
@@ -179,7 +181,7 @@ class EKV(MosModel):
         d_vsb = -is_ / VT * df_f
         d_vdb = is_ / VT * df_r
         gm = clm * d_vp / n
-        gds = clm * d_vdb + lam * i0
+        gds = clm * d_vdb + lam * i0 + eta * gm      # DIBL: vp also depends on vds through vgs + eta*vds
         gmb = clm * (-d_vp / n - d_vsb - d_vdb)
         return i0 * clm, gm, gds, gmb
 
@@ -192,7 +194,7 @@ class EKV(MosModel):
         Depletion/accumulation charge is not modelled (documented limitation).
         """
         n = self.p["n"]
-        vp = (vgs - vbs - self.vto) / n
+        vp = (vgs + self.p["eta"] * vds - vbs - self.vto) / n
         i_f, _ = _ekv_f((vp + vbs) / VT)          # vsb = -vbs
         i_r, _ = _ekv_f((vp - (vds - vbs)) / VT)  # vdb = vds - vbs
         qs = 2 * i_f / (math.sqrt(1 + 4 * i_f) + 1)

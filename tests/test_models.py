@@ -8,7 +8,9 @@ NMOS1 = Level1(1, dict(vto=0.5, kp=300e-6, lambda_=0.05, gamma=0.4, phi=0.7))
 PMOS1 = Level1(-1, dict(vto=-0.5, kp=100e-6, lambda_=0.05, gamma=0.4, phi=0.7))
 NEKV = EKV(1, dict(vto=0.5, kp=300e-6, n=1.3, lambda_=0.05))
 PEKV = EKV(-1, dict(vto=-0.5, kp=100e-6, n=1.3, lambda_=0.05))
-MODELS = [NMOS1, PMOS1, NEKV, PEKV]
+NDIBL = EKV(1, dict(vto=0.4, kp=300e-6, n=1.1, lambda_=0.03, eta=0.08))
+PDIBL = EKV(-1, dict(vto=-0.4, kp=100e-6, n=1.1, lambda_=0.03, eta=0.08))
+MODELS = [NMOS1, PMOS1, NEKV, PEKV, NDIBL, PDIBL]
 W, L = 2e-6, 0.18e-6
 
 
@@ -88,3 +90,26 @@ def test_ekv_strong_inversion_approaches_square_law():
     vov = 1.0  # vgs - vto
     i = m.evaluate(2.0, 1.5, 0.0, 0.0, W, L)[0]  # saturated
     assert i == pytest.approx(beta / (2 * 1.3) * vov**2, rel=0.02)
+
+
+def test_dibl_shifts_the_threshold_by_eta_times_vds():
+    # weak inversion: Id ~ exp((Vgs + eta*Vds - Vto) / (n*Vt)); compare two Vds at the same Vgs
+    import math
+    from minispice.models import VT
+    m = EKV(1, dict(vto=0.5, kp=300e-6, n=1.2, eta=0.1))
+    m0 = EKV(1, dict(vto=0.5, kp=300e-6, n=1.2, eta=0.0))
+    # Vgs = 0 is deep weak inversion (F(x) ~ e^x to better than 0.1 %) and Vds >> Vt, so the
+    # (1 - exp(-Vds/Vt)) factor is 1: the DIBL-only ratio must be exp(eta*dVds / (n*Vt)).
+    i1, i2 = m.evaluate(0.4, 0.0, 0, 0, W, L)[0], m.evaluate(0.8, 0.0, 0, 0, W, L)[0]
+    j1, j2 = m0.evaluate(0.4, 0.0, 0, 0, W, L)[0], m0.evaluate(0.8, 0.0, 0, 0, W, L)[0]
+    assert (i2 / i1) / (j2 / j1) == pytest.approx(math.exp(0.1 * 0.4 / (1.2 * VT)), rel=2e-3)
+
+
+def test_dibl_adds_eta_times_gm_to_gds():
+    m = EKV(1, dict(vto=0.5, kp=300e-6, n=1.2, eta=0.1))
+    m0 = EKV(1, dict(vto=0.5, kp=300e-6, n=1.2, eta=0.0))
+    # same current needs the same effective gate voltage: compare at Vgs' = Vgs + eta*Vds
+    i, gd, gg, *_ = m.evaluate(1.0, 0.7, 0, 0, W, L)
+    i0, gd0, gg0, *_ = m0.evaluate(1.0, 0.7 + 0.1 * 1.0, 0, 0, W, L)
+    assert i == pytest.approx(i0, rel=1e-12)
+    assert gd == pytest.approx(gd0 + 0.1 * gg0, rel=1e-9)
