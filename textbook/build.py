@@ -37,6 +37,17 @@ def run_tests():
     return (int(m.group(1)) if m else 0), (int(f.group(1)) if f else 0)
 
 
+JS_FILES = ["core.js", "ui.js", "scene3d.js", "schem.js", "ia_core.js", "ia_l1_4.js", "ia_l5_10.js", "ia_l7.js", "boot.js"]
+
+
+def interactive_assets():
+    """CSS, JavaScript and the lesson-7 data of the interactive widgets (everything inlined: the page stays one file)."""
+    js = "\n".join((HERE / "js" / f).read_text(encoding="utf-8") for f in JS_FILES)
+    css = (HERE / "css" / "ia.css").read_text(encoding="utf-8")
+    data = (ROOT / "examples" / "out" / "lesson7_data.json").read_text(encoding="utf-8").replace("</", "<\\/")
+    return css, js, data
+
+
 CSS = """
 :root{--bg:#fbfbf9;--fg:#1d2330;--mut:#5b6475;--line:#dfe3ea;--card:#fff;--acc:#1f3b73;--acc2:#b03a00;--code:#f3f4f7;
 --ok:#e7f5ea;--okb:#2d7a3e;--warn:#fff3e0;--warnb:#b86a00;--info:#e8f0fe;--infob:#2a5bd7;--no:#fde8e8;--nob:#b3261e}
@@ -53,7 +64,7 @@ nav.toc a{display:inline-block;padding:3px 10px;border:1px solid var(--line);bor
 nav.toc a:hover{border-color:var(--acc);color:var(--acc)}
 main{max-width:1120px;margin:0 auto;padding:8px 20px 60px}
 section.lesson,section.plain{padding-top:32px;border-top:1px solid var(--line);margin-top:28px}
-section.lesson>*:not(figure):not(.tw):not(pre):not(details):not(.box),section.plain>*:not(figure):not(.tw):not(pre):not(details):not(.box){max-width:800px}
+section.lesson>*:not(figure):not(.tw):not(pre):not(details):not(.box):not(.ia),section.plain>*:not(figure):not(.tw):not(pre):not(details):not(.box):not(.ia){max-width:800px}
 h2{font-size:1.65rem;margin:.2rem 0 .6rem;display:flex;align-items:center;gap:12px}
 h2 .num{display:inline-flex;align-items:center;justify-content:center;width:2.1rem;height:2.1rem;border-radius:50%;background:var(--acc);color:var(--bg);font-size:1.1rem}
 h3{font-size:1.15rem;margin:2rem 0 .4rem;color:var(--acc)}
@@ -96,7 +107,7 @@ def intro(passed, failed, ng):
     s = f"""
 <section id="intro" class="plain"><h2><span class="num">0</span>시작하기</h2>
 <p>이 교재는 <b>SPICE를 처음 접하는 사람</b>이 평면형(planar) MOSFET의 compact model을 직접 계산해 보면서 SPICE가 회로를 푸는 방식을 이해하도록 만들었고, 마지막에는 FinFET과 GAA(나노시트)로 확장합니다. 직접 만든 작은 SPICE(<code>minispice</code>, Python)를 쓰고, 마지막에는 실제 시뮬레이터(ngspice)와 비교합니다.</p>
-<p>모든 레슨은 같은 순서입니다: <b>회로도 → 손 계산 → 코드·시뮬레이션 → 그래프 → 요약</b>. 본문의 숫자는 이 페이지를 만들 때 코드를 실제로 실행해서 넣은 값입니다.</p>
+<p>모든 레슨은 같은 순서입니다: <b>회로도 → 손 계산 → 코드·시뮬레이션 → 그래프 → 요약</b>. 본문의 숫자는 이 페이지를 만들 때 코드를 실제로 실행해서 넣은 값입니다.</p>\n<p><b>직접 조작해 보기</b>: 레슨 8을 뺀 모든 레슨에는 슬라이더로 입력을 바꾸면 <b>3D 구조와 회로도에서 전압(색)과 전류(움직이는 점의 방향·속도·크기)가 바뀌는</b> 시각화가 있습니다. 모델은 브라우저의 JavaScript로 다시 구현한 것이고, 테스트(<code>tests/test_js_parity.py</code>)가 minispice(Python)와 같은 값을 내는지 확인합니다. 3D 안의 채널 전위 분포는 모델 식에서 유도한 근사이고 TCAD 결과가 아닙니다.</p>
 <h3>전체 지도와 검증 상태</h3>
 {lessons.tbl(["레슨", "주제", "모델", "무엇과 비교했나", "상태"], rows)}
 <p>자동 테스트: <b>{passed}개 통과{f", {failed}개 실패" if failed else ""}</b> (<code>pytest</code>, 모델 도함수·전하 모델·회로 해석).</p>
@@ -127,6 +138,7 @@ def appendix(passed, failed):
 <li><b>전하 모델</b>: 공핍·축적(벌크) 전하 없음, 용량 행렬은 수치 미분. n &gt; 1에서 Cgb &lt; 0.</li>
 <li><b>솔버</b>: 조밀(dense) 행렬이라 수백 노드까지. gmin = 10⁻¹² S 고정. 초기조건(.ic, UIC) 미지원이라 링 오실레이터는 전류 펄스로 기동. 수렴 보조는 전압 스텝 제한, gmin/source stepping, 시간 스텝 분할만 있음.</li>
 <li><b>ngspice 비교</b>는 Level 1만. EKV·전하 모델의 외부 대조는 아직 없음(레슨 8).</li>
+<li><b>인터랙티브 시각화</b>: 3D 안의 채널 전위·전하 분포는 compact model 식에서 유도한 근사이며 TCAD 결과가 아닙니다(소스·드레인·게이트는 단자 전압 그대로). 전류 점의 개수·속도는 로그 스케일의 표시용이라 실제 속도에 비례하지 않습니다. 레슨 7은 미리 계산해 둔 ngspice 결과 위에서 커서를 움직이는 것이고 ngspice를 브라우저에서 실행하지 않으며, 링 오실레이터 회로도에는 전류 점이 없습니다(저장된 것이 노드 전압뿐). 레슨 8에는 시각화가 없습니다.</li>
 <li><b>FinFET·GAA(레슨 9, 10)</b>: 모델은 평면형과 같은 EKV에 DIBL 계수를 더한 것이고, n·η·fin/시트 치수는 가상의 예시값입니다. 3차원 정전기, 양자 효과, 기생 소자는 없고, 자연 길이 이론(L 의존성)은 공식을 확인하지 못해 다루지 않았습니다.</li></ul>
 <h3>B. 개발 중 발견하고 고친 문제</h3>
 <ol>
@@ -135,6 +147,7 @@ def appendix(passed, failed):
 <li><b>EKV 비교 조건</b>: Vds = 1.0 V에서 비교하니 포화가 아니라서 EKV/Level 1 비율이 1/n과 어긋났습니다 → 모든 비교를 Vds = 1.8 V(포화)로 통일(레슨 5).</li>
 <li><b>전하 모델의 단자 순서 오류와 무의미한 테스트</b>: 링이 오히려 빨라지는 결과로 발견했고, 용량 테스트가 허용오차 때문에 항상 통과하고 있었습니다 → 수정하고 테스트를 무차원으로 다시 작성(레슨 6).</li>
 <li><b>자연 길이 공식</b>: 레슨 9·10을 위해 원문(Berkeley 슬라이드, IEEE 논문, Nature 리뷰)을 읽으려 했지만 공식을 정확히 얻지 못했습니다(링크 404, 로그인 필요, 슬라이드 글자 깨짐) → 기억에 의존해 쓰지 않고, 원문에서 확인된 설계 경험칙만 사용했습니다.</li>
+<li><b>인터랙티브 위젯의 해 찾기 오류</b>: 레슨 10 위젯에서 감소 함수에 이분법을 써서 스위칭 문턱 Vm이 10²³ V로 튀고 인버터 이득이 0.96으로 나왔습니다. JS 모델을 Python과 대조하는 테스트는 모델 코드만 검사해서 이를 잡지 못했고, 화면의 범례 숫자가 이상해 보여서 발견했습니다 → 이분법이 해를 못 찾으면 NaN을 돌려주게 하고, 위젯이 계산한 값을 Python 결과와 대조하는 테스트(<code>tests/test_ia_widgets.py</code>)를 추가했습니다. 버그를 다시 넣으면 테스트가 실패하는 것도 확인했습니다. 같은 작업에서 EKV 채널 전위 프로파일의 드레인 끝점이 수치 상쇄로 18 V까지 튀는 문제도 대조 테스트가 잡아서 고쳤습니다.</li>
 <li><b>DIBL 테스트의 가정</b>: 문턱 근처 Vgs에서 “약반전 근사”로 검사했다가 실패했습니다 → 근사가 성립하는 깊은 약반전으로 옮기고, 정확한 등가성(<code>Id(vgs, vds) = Id(vgs + η·vds, vds)</code>) 검사를 따로 두었습니다.</li></ol>
 <h3>C. 코드 지도</h3>
 {lessons.tbl(["경로", "내용"], [
@@ -145,7 +158,8 @@ def appendix(passed, failed):
     ["<code>examples/lessonN_*.py</code>", "레슨별 스크립트(수치 출력 + 그림)"],
     ["<code>examples/va/ekv_simple.va</code>", "레슨 8의 Verilog-A (미컴파일)"],
     ["<code>examples/draw_multigate.py</code>", "FinFET·GAA의 3차원 구조도와 단면도"],
-    ["<code>tests/</code>", f"테스트 {passed}개"],
+    ["<code>textbook/js/</code>", "인터랙티브 시각화(외부 라이브러리 없음): core.js(모델), scene3d.js(3D), schem.js(회로도), ia_*.js(레슨별 위젯)"],
+    ["<code>tests/</code>", f"테스트 {passed}개 (모델·전하·회로, JS 모델 대조 <code>test_js_parity.py</code>, 위젯 값 대조 <code>test_ia_widgets.py</code>)"],
     ["<code>textbook/</code>", "이 교재의 생성 코드 (<code>build.py</code>)"]])}
 </section>"""
 
@@ -160,17 +174,20 @@ def main():
     toc = "".join(f'<li><a href="#{a}">{t}</a></li>' for a, t in nav)
     body = intro(passed, failed, ng) + "".join(f() for f in (lessons.lesson1, lessons.lesson2, lessons.lesson3, lessons.lesson4,
                                                              lessons.lesson5, lessons.lesson6, lessons.lesson7, lessons.lesson8, lessons.lesson9, lessons.lesson10)) + lessons.resources() + appendix(passed, failed)
+    ia_css, ia_js, ia_data = interactive_assets()
     today = datetime.date.today().isoformat()
     page = f"""<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SPICE로 배우는 MOSFET Compact Model</title>
 <meta name="description" content="평면형 MOSFET compact model을 직접 계산하며 SPICE가 회로를 푸는 방식을 배우고 FinFET·GAA로 확장하는 10개 레슨">
-<style>{CSS}</style></head><body>
+<style>{CSS}\n{ia_css}</style></head><body>
 <header class="hero"><h1>SPICE로 배우는 MOSFET Compact Model</h1>
 <p>평면형(planar) MOSFET을 한 개부터 풀어 보며 SPICE가 방정식을 푸는 방식, 모델의 의미, 실제 시뮬레이터와의 비교, 그리고 FinFET과 GAA까지. 총 10개 레슨.</p>
 <p>생성: {today} · Python minispice · ngspice {ng}</p></header>
 <nav class="toc"><ul>{toc}</ul></nav>
 <main>{body}</main>
+<script type="application/json" id="ia-data-l7">{ia_data}</script>
+<script>{ia_js}</script>
 <footer>이 페이지는 <code>python textbook/build.py</code>로 생성됩니다. 본문의 수치는 생성 시점의 코드 실행 결과이며, 그림은 <code>examples/</code>의 스크립트가 만듭니다.</footer>
 </body></html>"""
     out = ROOT / "docs" / "index.html"

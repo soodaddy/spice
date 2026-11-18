@@ -126,7 +126,7 @@ J["tran"] = dict(max_dv=float(dvt.max()), rms_dv=float(np.sqrt(np.mean(dvt**2)))
 # ---- E. ring oscillator -------------------------------------------------------------------------------------
 c, an = parse(NET_RING)
 rg = transient(c, 2e-12, 6e-9)
-ngr = run_ngspice(NET_RING, "ring", "tran 2p 6n 0 2p", ["v(n1)"])
+ngr = run_ngspice(NET_RING, "ring", "tran 2p 6n 0 2p", ["v(n1)", "v(n2)", "v(n3)", "v(n4)", "v(n5)"])
 
 
 def per(t, v):
@@ -209,6 +209,21 @@ ax.plot(rg.axis * 1e9, rg["v(n1)"], color="#1f3b73", lw=2.2, label=f"minispice: 
 ax.plot(ngr[::3, 0] * 1e9, ngr[::3, 1], "o", color="#d95f02", ms=3.5, mfc="none", mew=1, label=f"ngspice: T = {J['ring']['period_ng']*1e12:.2f} ps")
 ax.set(xlabel="t [ns]", ylabel="V(n1) [V]", title="(f) 5-stage ring oscillator (same netlist)", xlim=(4.6, 5.4))
 ax.legend(loc="lower center", fontsize=8.5, bbox_to_anchor=(0.5, -0.32)); ax.grid(alpha=0.25)
+
+# ---- data for the interactive widget of the textbook (downsampled, 10 significant digits)
+def _r(a):
+    return [float(f"{float(x):.10g}") for x in a]
+
+
+win = (rg.axis >= 4.6e-9) & (rg.axis <= 5.4e-9)
+wdata = dict(
+    curves=dict(vgs=[0.6, 0.8, 1.0, 1.2, 1.4], vds=_r(curves[0][1]), mini=[_r(c[2]) for c in curves], ng=[_r(c[3]) for c in curves]),
+    vtc=dict(vin=_r(vtc.axis[::2]), mini=_r(vtc["v(out)"][::2]), ng=_r(ng_vtc[::2, 1])),
+    tran=dict(t=_r(tr.axis), vin=_r(vin_t), mini=_r(tr["v(out)"]), ng=_r(v_ng), idd_mini=_r(-tr["i(vdd)"]), idd_ng=_r(i_ng)),
+    ring=dict(t=_r(rg.axis[win]), mini=[_r(rg[f"v(n{k})"][win]) for k in range(1, 6)],
+              ng=[_r(np.interp(rg.axis[win], ngr[:, 0], ngr[:, k])) for k in range(1, 6)]),
+)
+(out / "lesson7_data.json").write_text(json.dumps(wdata, separators=(",", ":")))
 
 fig.suptitle("Lesson 7 - cross-check against ngspice (SPICE Level 1, same netlists)", fontsize=13)
 fig.savefig(out / "lesson7.png", dpi=130)

@@ -43,6 +43,7 @@ brew install ngspice                               # 레슨 7에만 필요 (macO
 ```
 
 교재의 숫자는 `build.py`가 레슨 스크립트와 테스트를 실제로 실행해서 넣습니다.
+레슨 8을 뺀 모든 레슨에는 슬라이더로 입력을 바꾸면 3D 구조와 회로도의 전압·전류가 바뀌는 시각화가 있습니다 (`textbook/js/`, 외부 라이브러리 없음). JavaScript 모델은 `tests/test_js_parity.py`가 Python 모델과 대조합니다 (node 필요).
 `examples/out/`(그림, JSON)은 생성물이라 저장소에 포함하지 않았습니다.
 
 ## 라이선스

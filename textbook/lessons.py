@@ -50,6 +50,12 @@ def details(summary, body):
     return f"<details><summary>{summary}</summary>{body}</details>"
 
 
+def ia(key):
+    """Placeholder of an interactive widget (filled in by the page's JavaScript, see textbook/js)."""
+    return (f'<div class="ia" id="ia-{key}"><p class="ia-fallback">슬라이더로 입력을 바꾸면 3D 구조와 회로도의 전압·전류가 바뀌는 시각화가 여기에 표시됩니다. '
+            f'(JavaScript가 필요합니다.)</p></div>')
+
+
 def fig(name, caption):
     b = base64.b64encode((OUT / f"{name}.png").read_bytes()).decode()
     return (f'<figure><img alt="{html.escape(caption)}" src="data:image/png;base64,{b}"><figcaption>{caption}</figcaption></figure>')
@@ -83,6 +89,7 @@ def lesson1():
 {eq("(Vd, Vg, Vs, Vb)  →  Id      (Id: 드레인 단자로 들어가는 전류)")}
 {box("info", "Vgs, Vds의 아래 첨자", "<p>아래 첨자 <code>s</code>는 static이 아니라 <b>source(소스)</b>입니다. <code>Vxy</code>는 <b>x 단자 전압에서 y 단자 전압을 뺀 값</b>입니다: <code>Vgs = Vg − Vs</code>, <code>Vds = Vd − Vs</code>. NMOS는 게이트와 <i>소스</i> 사이 전압 차이가 채널을 만들기 때문에 모델 식이 모두 Vgs, Vds로 쓰입니다. netlist의 <code>Vds d 0 1.8</code>에서 맨 앞 <code>V</code>는 “전압원”이라는 SPICE 문법이고 <code>ds</code>는 그냥 붙인 이름입니다.</p>")}
 {fig("lesson1", "그림 1-1. (a) 회로 기호와 시험 회로, (b) 같은 소자의 단면(평면형 NMOS), (c) 출력 특성, (d) √Id–Vgs")}
+{ia("l1")}
 
 <h3>1.2 파라미터: β, Vth, λ</h3>
 {tbl(["기호", "값", "의미"], [
@@ -145,6 +152,7 @@ def lesson2():
 <p>레슨 1에서는 Vds를 우리가 정했습니다. 이번에는 드레인에 <b>저항 5 kΩ</b>을 달아서 <b>Vd를 회로가 정하게</b> 합니다. 키르히호프 전류 법칙(KCL)에 따라 저항이 공급하는 전류와 트랜지스터가 흘려보내는 전류는 같아야 합니다.</p>
 {eq("(Vdd − Vd) / Rd  =  Id(Vd)\n  └ 직선(부하선)        └ 곡선(레슨 1의 식)")}
 {fig("lesson2", "그림 2-1. (a) 회로, (b) 한 Newton 스텝: 트랜지스터를 gds ∥ Ieq로 바꾼다, (c) 접선과 부하선의 교점이 다음 추측값, (d) 오차 감소")}
+{ia("l2")}
 <p>오른쪽이 Vd의 비선형 식이고 영역에 따라 식이 바뀌므로 공식 하나로 바로 풀 수 없습니다. 그래서 <b>추측 → 개선</b>을 반복합니다.</p>
 
 <h3>2.2 Newton의 아이디어: 곡선을 접선으로 바꾼다</h3>
@@ -182,6 +190,7 @@ def lesson3():
 <p>레슨 2의 회로에서 드레인에 <b>커패시터 CL = 100 fF</b>를 달고 게이트에 0 → 1.4 V 펄스를 넣습니다. 커패시터 전류 <code>i = C·dV/dt</code>가 KCL에 들어오므로 식이 <b>미분방정식</b>이 됩니다.</p>
 {eq("(Vd − Vdd)/Rd  +  Id(Vd, Vg)  +  C·dVd/dt  =  0")}
 {fig("lesson3", "그림 3-1. (a) 회로, (b) 한 시간 스텝에서 커패시터가 Geq ∥ Ieq로 바뀜(Backward Euler), (c) 전압 파형, (d) 전류 파형: iR = iD + iC")}
+{ia("l3")}
 
 <h3>3.2 SPICE의 해법: 시간을 조각내서 미분을 차분으로 바꾼다</h3>
 <p>시간을 간격 h(여기서는 20 ps)로 자르고 <code>dVd/dt ≈ (Vd_new − Vd_old)/h</code>로 바꿉니다(<b>Backward Euler</b>). 그러면 커패시터 전류가 이렇게 됩니다.</p>
@@ -240,6 +249,7 @@ def lesson4():
     ["전류 방향", "드레인 → 소스", "소스 → 드레인"]])}
 <p>정공의 이동도가 전자의 약 1/3이므로 PMOS의 폭을 3배(3 µm)로 해서 두 트랜지스터의 β를 맞춥니다: βn = 300µ·1/0.18 = <b>{k["beta_n"]*1e3:.4f} mA/V²</b>, βp = 100µ·3/0.18 = <b>{k["beta_p"]*1e3:.4f} mA/V²</b>. 그래서 회로가 위아래 대칭입니다.</p>
 {fig("lesson4", "그림 4-1. (a) CMOS 인버터, (b) CMOS 단면(NMOS는 p 기판, PMOS는 n-well 안), (c) VTC와 두 트랜지스터의 동작 영역, (d) 전원 전류, (e) 과도 응답, (f) 스위칭 중 전원 전류")}
+{ia("l4")}
 
 <h3>4.2 손 계산 ① 스위칭 문턱 Vm</h3>
 <p>Vout = Vin이 되는 점 Vm에서는 두 트랜지스터가 모두 포화이고 전류가 같습니다. λ를 무시하면</p>
@@ -291,6 +301,7 @@ def lesson5():
 {eq("Id = Is · ( F(Vp − Vs) − F(Vp − Vd) ) · (1 + λ|Vds|)\nVp = (Vg − VTO)/n         Is = 2·n·β·Vt²         F(x) = ln²(1 + e^(x/2))        (모든 전압은 벌크 기준)")}
 <p><code>Vt = kT/q</code> = {k["Vt"]*1e3:.3f} mV(27 °C), <code>n</code> = 1.3은 기울기 계수, <code>Is</code>는 특성 전류입니다. 이 소자에서 Is = 2·{k["n"]}·{k["beta"]*1e3:.4f}m·Vt² = <b>{k["Is"]*1e6:.4f} µA</b>입니다. F(x)는 x가 매우 음수이면 e^x, 매우 양수이면 (x/2)²에 가까워져서 두 영역을 매끄럽게 잇습니다. 드레인과 소스를 대칭으로 다루므로 레슨 1의 Vds &lt; 0 처리가 필요 없습니다.</p>
 {fig("lesson5", "그림 5-1. (a) 시험 회로(레슨 1과 같고 model = EKV), (b) 약반전의 단면(채널이 거의 없고 전자가 확산으로 이동), (c) Id–Vgs 로그 그래프와 반전 영역 구분, (d) Vds 의존성, (e) 문턱 아래 기울기(swing), (f) 문턱전압과 누설 전류")}
+{ia("l5")}
 
 <h3>5.2 손 계산: 약반전 전류</h3>
 <p>x ≪ 0이면 F(x) ≈ e^x이므로 소스 쪽 항만 남아 Vs = 0, Vds가 충분히 크면</p>
@@ -329,6 +340,7 @@ def lesson6():
 <h3>6.1 왜 필요한가</h3>
 <p>레슨 3·4의 지연은 외부 커패시터와 겹침(overlap) 용량만으로 계산한 값이라 <b>실제보다 낙관적</b>입니다. 실제 MOSFET은 채널의 반전 전하 때문에 게이트·소스·드레인 사이에 <b>바이어스에 따라 변하는 용량</b>을 갖습니다. 이것을 용량(C)이 아니라 <b>단자 전하 Q(V)</b>로 모델링해야 전하가 보존됩니다.</p>
 {fig("lesson6", "그림 6-1. (a) 소자 내부 용량 Cgd, Cgs, (b) 채널 전하가 소스와 드레인으로 나뉨, (c) 용량 대 Vds, (d) C–V 곡선, (e) 단자 전하, (f) 링 오실레이터에 미치는 영향")}
+{ia("l6")}
 
 <h3>6.2 전하는 어떻게 구하나 (EKV 전하 모델)</h3>
 <p>각 채널 끝의 정규화 전하 밀도 q를 전류 변수에서 구합니다: <code>i = q² + q</code>, 즉 <code>q = (√(1+4i) − 1)/2</code>(소스 끝은 i = i_f, 드레인 끝은 i = i_r). 채널을 따라 q를 적분하면 총 반전 전하가 되고, 위치 y/L를 가중치로 적분하면 드레인에 귀속되는 몫이 됩니다(<b>Ward–Dutton 분배</b>). 나머지는 소스 몫이고, 게이트 전하는 반대 부호입니다.</p>
@@ -380,6 +392,7 @@ def lesson7():
 <h3>7.1 방법</h3>
 <p>검증은 <b>“같은 입력, 다른 구현”</b>을 비교하는 것입니다. 인버터와 링 오실레이터의 netlist 파일을 그대로 두 시뮬레이터에 넣습니다(ngspice에는 분석 카드를 빼고 <code>.control</code> 블록을 붙여서 결과를 파일로 저장). 비교 조건을 맞추기 위해 ngspice에는 <code>reltol=1e-6 abstol=1e-14 vntol=1e-9 gmin=1e-12 method=trap</code>과 시간 간격 상한(<code>tmax = tstep</code>)을 줍니다. 모델은 두 쪽 모두 <b>SPICE Level 1</b>이고 겹침 용량만 쓰도록 맞췄습니다. EKV와 전하 모델은 비교 대상에서 제외했습니다(ngspice에 같은 방정식의 내장 모델이 있는지는 확인하지 않았습니다).</p>
 {fig("lesson7", "그림 7-1. (a) 한 netlist, 두 시뮬레이터, (b) 차이 요약, (c)~(f) 겹쳐 그린 결과 (선: minispice, ○: ngspice)")}
+{ia("l7")}
 {code("""brew install ngspice          # ngspice 47 로 확인함
 python examples/lesson7_ngspice.py""")}
 
@@ -523,6 +536,7 @@ def lesson9():
 <h3>9.1 왜 FinFET인가</h3>
 <p>평면형은 게이트가 채널 <b>위쪽 한 면</b>만 덮습니다. 게이트 길이 L이 짧아지면 드레인 전압이 채널 아래쪽 장벽을 낮추는 것(<b>DIBL</b>)을 게이트가 막지 못하고, 문턱 아래 기울기도 나빠져서 꺼진 상태의 누설이 커집니다. 해법은 <b>게이트와 채널의 용량성 결합을 키우는 것</b>, 즉 채널을 얇게 세우고 게이트가 여러 면을 감싸게 하는 것입니다. Berkeley 강의자료도 “게이트와 채널의 결합이 클수록 채널 전위를 더 잘 제어하고, DIBL이 줄어든다”고 설명합니다. {CHIP["fact"]}</p>
 {fig("lesson9", "그림 9-1. (a) FinFET 3차원 구조, (b) 채널에 수직인 단면(점선 = 게이트가 닿는 면), (c) 시험 회로와 netlist, (d) fin 수에 따른 유효 폭, (e) DIBL 100 mV/V에 필요한 몸체 크기, (f) 모델의 Id–Vgs (예시 파라미터)")}
+{ia("l9")}
 
 <h3>9.2 구조 읽기</h3>
 <ul><li><b>fin</b>: 기판 위에 세운 얇은 실리콘 벽입니다. 높이 H, 폭 W. 한 트랜지스터는 fin을 n개 나란히 둘 수 있습니다.</li>
@@ -580,6 +594,7 @@ def lesson10():
 <p>레슨 9의 경험칙에 따르면 FinFET은 W_fin ≈ L/2가 필요합니다. L이 10 nm이면 fin 폭이 5 nm여야 하고, fin을 이렇게 얇고 높게 세우는 것은 점점 어렵습니다. 게이트가 3면이 아니라 <b>4면(전방위)</b>을 감싸면 같은 몸체 두께에서 채널 제어가 더 좋아집니다. 이것이 <b>GAA(gate-all-around)</b>이고, 실리콘을 얇은 판(<b>나노시트</b>) 여러 장으로 수평 적층하거나 가는 원통(나노와이어)으로 만듭니다.</p>
 <p>업계 동향은 2차 자료로만 확인했습니다. 삼성이 2022년에 “3 nm” GAA 공정의 초기 생산을 시작했다고 보도되었고, TSMC의 N2도 나노시트를 쓰는 것으로 알려져 있습니다. 시기는 자료마다 다르고 현재의 양산 상태는 확인하지 못했으니 1차 출처로 확인하세요.</p>
 {fig("lesson10", "그림 10-1. (a) 나노시트 GAA 3차원 구조, (b) FinFET과 나노시트의 단면 비교, (c) 유효 폭: fin은 계단식, 나노시트는 연속, (d) Ion–Ioff 곡선, (e) 인버터 VTC, (f) 게이트가 감싸는 면과 n, η")}
+{ia("l10")}
 
 <h3>10.2 손 계산 ① 나노시트의 유효 폭 {CHIP["calc"]}{CHIP["illus"]}</h3>
 <p>게이트가 직사각형 시트를 완전히 감싸면 시트의 <b>둘레 전체</b>가 채널이 됩니다. 폭 W, 두께 T인 시트 한 장의 유효 폭은 2(W + T)이고, N장이면 N배입니다. (이 식은 기하학에서 유도한 것이고 특정 문헌에서 인용한 공식이 아닙니다.)</p>
