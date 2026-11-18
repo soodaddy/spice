@@ -58,6 +58,7 @@ h2{font-size:1.65rem;margin:.2rem 0 .6rem;display:flex;align-items:center;gap:12
 h2 .num{display:inline-flex;align-items:center;justify-content:center;width:2.1rem;height:2.1rem;border-radius:50%;background:var(--acc);color:var(--bg);font-size:1.1rem}
 h3{font-size:1.15rem;margin:2rem 0 .4rem;color:var(--acc)}
 .goal{background:var(--info);border-left:4px solid var(--infob);padding:10px 14px;border-radius:6px}
+main a{color:var(--acc)}
 code{background:var(--code);padding:.08em .35em;border-radius:4px;font:0.92em ui-monospace,SFMono-Regular,Menlo,monospace}
 pre{background:var(--code);padding:12px 14px;border-radius:8px;overflow:auto;margin:.8rem 0;max-width:100%}
 pre code{background:none;padding:0;font-size:.88rem;line-height:1.55}
@@ -149,10 +150,10 @@ def main():
     passed, failed = run_tests()
     ng = lessons.J(7)["ngspice_version"]
     nav = [("intro", "시작하기")] + [(f"l{n}", f"{n}. {t}") for n, t in
-           ((1, "NMOS 하나"), (2, "Newton"), (3, "Transient"), (4, "CMOS 인버터"), (5, "EKV"), (6, "전하 모델"), (7, "ngspice"), (8, "OSDI"))] + [("appendix", "부록")]
+           ((1, "NMOS 하나"), (2, "Newton"), (3, "Transient"), (4, "CMOS 인버터"), (5, "EKV"), (6, "전하 모델"), (7, "ngspice"), (8, "OSDI"))] + [("resources", "추천 자료"), ("appendix", "부록")]
     toc = "".join(f'<li><a href="#{a}">{t}</a></li>' for a, t in nav)
     body = intro(passed, failed, ng) + "".join(f() for f in (lessons.lesson1, lessons.lesson2, lessons.lesson3, lessons.lesson4,
-                                                             lessons.lesson5, lessons.lesson6, lessons.lesson7, lessons.lesson8)) + appendix(passed, failed)
+                                                             lessons.lesson5, lessons.lesson6, lessons.lesson7, lessons.lesson8)) + lessons.resources() + appendix(passed, failed)
     today = datetime.date.today().isoformat()
     page = f"""<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

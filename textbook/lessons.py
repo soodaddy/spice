@@ -441,3 +441,39 @@ N1 d g s b nmod W=1u L=0.18u""")}
 <p>이 비교가 통과하면 같은 방정식의 서로 다른 구현이 일치한다는 뜻이고, 이어서 공개된 실제 모델(예: BSIM-CMG의 Verilog-A)을 같은 방식으로 불러오는 것이 다음 단계입니다.</p>
 {box("ok", "요약", "<ul><li>Verilog-A는 전압→전류·전하 관계만 쓰고, 도함수는 컴파일러가 만든다.</li><li>OpenVAF가 .osdi로 컴파일하고, ngspice가 <code>pre_osdi</code>로 불러 N 소자로 쓴다.</li><li>이 레슨의 실행은 아직 검증되지 않았다.</li></ul>")}</section>"""
     return s
+
+
+# ---------------------------------------------------------------- recommended resources
+def _a(url, text):
+    return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{text}</a>'
+
+
+def resources():
+    ok, mem, unk = "검색으로 확인", "저자의 기억(검색에서는 확인 못 함)", "내용 미확인"
+    books = [
+        ["<b>The SPICE Book</b><br>Andrei Vladimirescu (Wiley)", "SPICE 개발에 참여한 저자의 책. 시뮬레이션 알고리즘과 장치 모델 부록. 레슨 2~3과 연결", ok],
+        ["<b>Operation and Modeling of the MOS Transistor</b><br>Yannis Tsividis, Colin McAndrew", "MOSFET 물리와 모델링(전하 모델 포함)의 표준 교재로 알려져 있음", mem],
+        ["<b>Charge-Based MOS Transistor Modeling: The EKV Model for Low-Power and RF IC Design</b><br>Christian Enz, Eric Vittoz (Wiley)", "EKV를 가장 자세히 다룬 책. 레슨 5~6의 다음 단계", ok],
+        ["<b>MOSFET Models for SPICE Simulation, Including BSIM3v3 and BSIM4</b><br>William Liu", "실제 산업 모델(BSIM)을 공부할 때", ok],
+        ["<b>Compact MOSFET Models for VLSI Design</b><br>A. B. Bhattacharyya", "EKV, BSIM, PSP와 전하 기반 모델링을 두루 다룸", "검색 결과에 언급됨"],
+        ["<b>Inside SPICE</b><br>Ron Kielkowski", "제목상 SPICE 내부 알고리즘을 다루는 책", unk]]
+    videos = [
+        [_a("https://classcentral.com/classroom/youtube-semiconductor-device-modeling-47521", "NPTEL (IIT Madras) “Semiconductor Device Modeling”"),
+         "MOSFET의 DC 모델, 문턱전압과 표면 전위 기반 해, 파라미터 추출, 소형화 효과. 이 교재의 주제와 가장 가까움 (YouTube 재생목록을 Class Central이 정리한 페이지)"],
+        [_a("https://ngspice.sourceforge.io/tutorials.html", "ngspice 공식 튜토리얼 목록"),
+         "IISc Bangalore 입문 영상, Tom Anderson의 시뮬레이션 시리즈, KiCad와 ngspice 시연 채널 등 YouTube 링크 모음. 개별 영상의 품질은 직접 확인"],
+        [_a("https://github.com/benedictjones/engineeringthings-pyspice", "PySpice 영상 시리즈 (작성자 GitHub)"), "Python으로 ngspice를 돌리는 방법"],
+        [_a("https://graphsearch.epfl.ch/en/concept/40345/lectures", "EPFL의 EKV 모델 강의 목록"), "YouTube 영상인지는 확인하지 못함"],
+        [_a("https://hasler.ece.gatech.edu/Courses/ECE4430/Proj1/index.html", "Georgia Tech ECE4430 MOSFET 모델링 과제 페이지"),
+         "EKV SPICE 모델 추출 자료와 Brad Minch, Ali Hajimiri 강의 링크"]]
+    s = '<section id="resources" class="plain"><h2><span class="num">+</span>추천 자료: 책과 강의</h2>'
+    s += "<p>이 교재 다음 단계를 위한 자료입니다. 레슨 순서로 보면 <b>레슨 2~3(알고리즘)</b>은 The SPICE Book, <b>레슨 1·5·6(MOSFET 모델)</b>은 Tsividis 책과 Enz·Vittoz 책, <b>레슨 7~8(ngspice, OSDI)</b>은 ngspice 공식 문서가 맞습니다.</p>"
+    s += "<h3>책</h3>" + tbl(["책", "어디에 좋은가", "이 목록을 만들 때의 확인 수준"], books)
+    s += ("<p>책은 저작권 문제로 링크를 달지 않았습니다. 무료 자료로는 " + _a("https://ngspice.sourceforge.io/ngspice-tutorial.html", "ngspice 공식 초보자 튜토리얼")
+          + "과 ngspice 매뉴얼(OSDI 절 포함)이 있습니다.</p>")
+    s += "<h3>강의와 영상</h3>" + tbl(["자료", "설명"], videos)
+    s += box("warn", "확인하지 못한 것", "<ul><li>위 링크는 웹 검색으로 찾은 것이고 <b>YouTube 영상을 직접 열어 보지는 못했습니다.</b> 지금도 재생되는지, 어떤 언어인지(대부분 영어) 확인해 보세요.</li>"
+                    "<li><b>한국어 SPICE·MOSFET 모델링 YouTube 채널은 검색으로 찾지 못했습니다.</b> 채널 이름을 지어내지 않았습니다. “BSIM 모델 강의”, “반도체 소자 SPICE 모델링”, “LTspice MOSFET 시뮬레이션” 같은 검색어로 직접 찾아보세요.</li>"
+                    "<li>목록 작성일: 2026-11-19. 자료의 가용성은 시간이 지나면 달라집니다.</li></ul>")
+    s += "</section>"
+    return s
