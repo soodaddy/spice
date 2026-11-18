@@ -1,0 +1,11 @@
+CMOS inverter
+.model nch nmos level=1 vto=0.5 kp=300u lambda=0.05 cgso=3e-10 cgdo=3e-10
+.model pch pmos level=1 vto=-0.5 kp=100u lambda=0.05 cgso=3e-10 cgdo=3e-10
+Vdd vdd 0 1.8
+Vin in 0 PULSE(0 1.8 1n 0.1n 0.1n 2n 5n)
+M1 out in 0 0 nch W=1u L=0.18u
+M2 out in vdd vdd pch W=3u L=0.18u
+CL out 0 10f
+.dc Vin 0 1.8 0.01
+.tran 10p 10n
+.end

@@ -1,0 +1,49 @@
+// Simplified long-channel EKV MOSFET (DC only) - the same equations as minispice's `EKV` class.
+//
+// STATUS: written for lesson 8 but NOT yet compiled or simulated by the author
+//         (no OpenVAF run was possible in the authoring environment). Treat it as untested.
+//
+//   Id = Is * ( F(Vp - Vs) - F(Vp - Vd) ) * (1 + LAMBDA*|Vds|)
+//   Vp = (Vg - VTO) / N          Is = 2 * N * KP * (W/L) * Vt^2          F(x) = ln^2( 1 + exp(x/2) )
+//
+// All voltages are referred to the bulk, so the model is source/drain symmetric.
+// TYPE = +1 for NMOS, -1 for PMOS (VTO is then entered negative, as in SPICE).
+// Not modelled here: terminal charges (the Python model has them, this file does not).
+
+`include "constants.vams"
+`include "disciplines.vams"
+
+module ekv_simple(d, g, s, b);
+    inout d, g, s, b;
+    electrical d, g, s, b;
+
+    parameter real TYPE   = 1.0;
+    parameter real VTO    = 0.5;
+    parameter real KP     = 200e-6;
+    parameter real N      = 1.3;
+    parameter real LAMBDA = 0.0;
+    (* type = "instance" *) parameter real W = 1e-6;
+    (* type = "instance" *) parameter real L = 1e-6;
+
+    real vt, i_s, vp, vsb, vdb, vgb;
+    real hf, hr, spf, spr, i_f, i_r, ids;
+
+    analog begin
+        vt  = $vt;                                  // kT/q at the circuit temperature
+        vgb = TYPE * V(g, b);
+        vsb = TYPE * V(s, b);
+        vdb = TYPE * V(d, b);
+        vp  = (vgb - TYPE * VTO) / N;
+        i_s = 2.0 * N * KP * (W / L) * vt * vt;
+
+        hf = 0.5 * (vp - vsb) / vt;                 // x/2 for the forward (source) end
+        hr = 0.5 * (vp - vdb) / vt;                 // x/2 for the reverse (drain) end
+        spf = (hf > 30.0) ? hf : ln(1.0 + exp(hf)); // softplus, guarded against overflow
+        spr = (hr > 30.0) ? hr : ln(1.0 + exp(hr));
+        i_f = spf * spf;
+        i_r = spr * spr;
+
+        ids = i_s * (i_f - i_r) * (1.0 + LAMBDA * abs(vdb - vsb));
+        I(d, s) <+ TYPE * ids;
+    end
+endmodule

@@ -1,0 +1,19 @@
+[project]
+name = "minispice"
+version = "0.1.0"
+description = "Learning-oriented mini SPICE with MOSFET compact models"
+requires-python = ">=3.10"
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+dev = ["pytest", "matplotlib"]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["minispice"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
